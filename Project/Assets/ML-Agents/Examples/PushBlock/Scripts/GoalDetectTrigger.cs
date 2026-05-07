@@ -25,7 +25,7 @@ public class GoalDetectTrigger : MonoBehaviour
     {
         if (col.CompareTag(tagToDetect))
         {
-            onTriggerEnterEvent.Invoke(m_col, GoalValue);
+            onTriggerEnterEvent.Invoke(col, GoalValue);
         }
     }
 
@@ -33,7 +33,7 @@ public class GoalDetectTrigger : MonoBehaviour
     {
         if (col.CompareTag(tagToDetect))
         {
-            onTriggerStayEvent.Invoke(m_col, GoalValue);
+            onTriggerStayEvent.Invoke(col, GoalValue);
         }
     }
 
@@ -41,7 +41,7 @@ public class GoalDetectTrigger : MonoBehaviour
     {
         if (col.CompareTag(tagToDetect))
         {
-            onTriggerExitEvent.Invoke(m_col, GoalValue);
+            onTriggerExitEvent.Invoke(col, GoalValue);
         }
     }
     // Start is called before the first frame update
