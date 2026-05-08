@@ -45,6 +45,8 @@ public class PushAgentBasic : Agent
 
     Rigidbody m_BlockRb;  //cached on initialization
     Rigidbody m_AgentRb;  //cached on initialization
+    Collider m_BlockCollider; //cached on initialization
+    Collider m_GoalCollider; //cached on initialization
     Material m_GroundMaterial; //cached on Awake()
 
     /// <summary>
@@ -87,6 +89,12 @@ public class PushAgentBasic : Agent
     float m_startBlockGoalDistance = -1f;
     float m_finalBlockGoalDistance = -1f;
     float m_normalizedBlockProgress = 0f;
+    float m_startGoalZoneErrorXZ = -1f;
+    float m_finalGoalZoneErrorXZ = -1f;
+    float m_normalizedTaskProgress = 0f;
+    float m_finalCenterDistanceXZ = -1f;
+    float m_finalCenterDistanceXYZ = -1f;
+    int m_successGoalConsistency = 0;
     string m_episodeEndReason = "unknown";
     string m_learningImprovementCsvPath;
     string m_agentEfficiencyCsvPath;
@@ -152,6 +160,8 @@ public class PushAgentBasic : Agent
         m_AgentRb = GetComponent<Rigidbody>();
         // Cache the block rigidbody
         m_BlockRb = block.GetComponent<Rigidbody>();
+        m_BlockCollider = block.GetComponent<Collider>();
+        m_GoalCollider = goal != null ? goal.GetComponent<Collider>() : null;
         // Get the ground's bounds
         areaBounds = ground.GetComponent<Collider>().bounds;
         // Get the ground renderer so we can change the material when a goal is scored
@@ -386,23 +396,54 @@ public class PushAgentBasic : Agent
         return string.Format(CultureInfo.InvariantCulture, "{0:F4},{1:F4},{2:F4}", v.x, v.y, v.z);
     }
 
+    float DistanceXZ(Vector3 a, Vector3 b)
+    {
+        var dx = a.x - b.x;
+        var dz = a.z - b.z;
+        return Mathf.Sqrt(dx * dx + dz * dz);
+    }
+
+    float BoundsDistanceXZ(Bounds a, Bounds b)
+    {
+        var dx = Mathf.Max(0f, Mathf.Max(a.min.x - b.max.x, b.min.x - a.max.x));
+        var dz = Mathf.Max(0f, Mathf.Max(a.min.z - b.max.z, b.min.z - a.max.z));
+        return Mathf.Sqrt(dx * dx + dz * dz);
+    }
+
+    float GetGoalZoneErrorXZ()
+    {
+        if (m_BlockCollider != null && m_GoalCollider != null)
+        {
+            return BoundsDistanceXZ(m_BlockCollider.bounds, m_GoalCollider.bounds);
+        }
+
+        if (block != null && goal != null)
+        {
+            return DistanceXZ(block.transform.position, goal.transform.position);
+        }
+
+        return -1f;
+    }
+
     void CaptureEpisodeStartMetrics()
     {
         m_episodeStartBlockPos = block != null ? block.transform.position : Vector3.zero;
         m_episodeGoalPos = goal != null ? goal.transform.position : Vector3.zero;
         m_startBlockGoalDistance = Vector3.Distance(m_episodeStartBlockPos, m_episodeGoalPos);
+        m_startGoalZoneErrorXZ = GetGoalZoneErrorXZ();
 
         LogLearningImprovement(
             "start",
             string.Format(
                 CultureInfo.InvariantCulture,
-                "agent={0} episode={1} training_step={2} start_dist={3:F4} goal_pos=({4}) block_pos=({5})",
+                "agent={0} episode={1} training_step={2} start_dist={3:F4} start_goal_zone_error_xz={6:F4} goal_pos=({4}) block_pos=({5})",
                 GetAgentId(),
                 m_episodeId,
                 GetTrainingStep(),
                 m_startBlockGoalDistance,
                 VectorToCsv(m_episodeGoalPos),
-                VectorToCsv(m_episodeStartBlockPos)
+                VectorToCsv(m_episodeStartBlockPos),
+                m_startGoalZoneErrorXZ
             )
         );
 
@@ -653,6 +694,50 @@ public class PushAgentBasic : Agent
         UnityEngine.Debug.Log($"{reliabilityLogPrefix} {stage} {message}");
     }
 
+    string ReadFirstLineShared(string path)
+    {
+        using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+        using (var reader = new StreamReader(stream))
+        {
+            return reader.ReadLine();
+        }
+    }
+
+    string BuildSchemaMismatchPath(string originalPath)
+    {
+        var directory = Path.GetDirectoryName(originalPath) ?? string.Empty;
+        var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(originalPath);
+        var extension = Path.GetExtension(originalPath);
+        var stamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
+        return Path.Combine(directory, $"{fileNameWithoutExtension}_{stamp}{extension}");
+    }
+
+    string EnsureCsvFileReady(string currentPath, string expectedHeader, string logPrefix)
+    {
+        var directory = Path.GetDirectoryName(currentPath);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        if (!File.Exists(currentPath))
+        {
+            File.WriteAllText(currentPath, expectedHeader + System.Environment.NewLine);
+            return currentPath;
+        }
+
+        var firstLine = ReadFirstLineShared(currentPath);
+        if (string.Equals(firstLine, expectedHeader, System.StringComparison.Ordinal))
+        {
+            return currentPath;
+        }
+
+        var redirectedPath = BuildSchemaMismatchPath(currentPath);
+        File.WriteAllText(redirectedPath, expectedHeader + System.Environment.NewLine);
+        UnityEngine.Debug.LogWarning($"{logPrefix} header_mismatch existing_csv={currentPath} redirected_csv={redirectedPath}");
+        return redirectedPath;
+    }
+
     void CaptureEpisodeEndMetrics(bool success, string endReason)
     {
         if (m_episodeMetricsRecorded)
@@ -664,6 +749,10 @@ public class PushAgentBasic : Agent
         m_episodeEndBlockPos = block != null ? block.transform.position : Vector3.zero;
         m_episodeGoalPos = goal != null ? goal.transform.position : Vector3.zero;
         m_finalBlockGoalDistance = Vector3.Distance(m_episodeEndBlockPos, m_episodeGoalPos);
+        m_finalCenterDistanceXYZ = m_finalBlockGoalDistance;
+        m_finalCenterDistanceXZ = DistanceXZ(m_episodeEndBlockPos, m_episodeGoalPos);
+        m_finalGoalZoneErrorXZ = success ? 0f : GetGoalZoneErrorXZ();
+        m_successGoalConsistency = !success || m_finalGoalZoneErrorXZ <= 0.001f ? 1 : 0;
 
         if (m_startBlockGoalDistance > 0.0001f)
         {
@@ -672,6 +761,19 @@ public class PushAgentBasic : Agent
         else
         {
             m_normalizedBlockProgress = 0f;
+        }
+
+        if (m_startGoalZoneErrorXZ > 0.0001f && m_finalGoalZoneErrorXZ >= 0f)
+        {
+            m_normalizedTaskProgress = (m_startGoalZoneErrorXZ - m_finalGoalZoneErrorXZ) / Mathf.Max(m_startGoalZoneErrorXZ, 0.0001f);
+        }
+        else if (success)
+        {
+            m_normalizedTaskProgress = 1f;
+        }
+        else
+        {
+            m_normalizedTaskProgress = 0f;
         }
 
         var stats = Academy.Instance.StatsRecorder;
@@ -740,19 +842,8 @@ public class PushAgentBasic : Agent
             m_usefulBlockDisplacement
         );
 
-        var dir = Path.GetDirectoryName(m_agentEfficiencyCsvPath);
-        if (!string.IsNullOrEmpty(dir))
-        {
-            Directory.CreateDirectory(dir);
-        }
-
-        var fileExists = File.Exists(m_agentEfficiencyCsvPath);
-        if (!fileExists)
-        {
-            var header = "agent_id,episode_id,training_step,success,end_reason,agent_path_length,block_path_length,contact_latency,contact_steps,push_ratio,idle_ratio,action_switch_rate,oscillation_index,path_efficiency,push_efficiency,useful_block_displacement";
-            File.WriteAllText(m_agentEfficiencyCsvPath, header + System.Environment.NewLine);
-        }
-
+        var header = "agent_id,episode_id,training_step,success,end_reason,agent_path_length,block_path_length,contact_latency,contact_steps,push_ratio,idle_ratio,action_switch_rate,oscillation_index,path_efficiency,push_efficiency,useful_block_displacement";
+        m_agentEfficiencyCsvPath = EnsureCsvFileReady(m_agentEfficiencyCsvPath, header, agentEfficiencyLogPrefix);
         File.AppendAllText(m_agentEfficiencyCsvPath, row + System.Environment.NewLine);
 
         LogAgentEfficiency(
@@ -820,19 +911,8 @@ public class PushAgentBasic : Agent
             m_finalBlockGoalDistance
         );
 
-        var dir = Path.GetDirectoryName(m_blockProgressCsvPath);
-        if (!string.IsNullOrEmpty(dir))
-        {
-            Directory.CreateDirectory(dir);
-        }
-
-        var fileExists = File.Exists(m_blockProgressCsvPath);
-        if (!fileExists)
-        {
-            var header = "agent_id,episode_id,training_step,success,end_reason,start_block_goal_distance,final_block_goal_distance,normalized_block_progress,progress_rate,final_goal_error";
-            File.WriteAllText(m_blockProgressCsvPath, header + System.Environment.NewLine);
-        }
-
+        var header = "agent_id,episode_id,training_step,success,end_reason,start_block_goal_distance,final_block_goal_distance,normalized_block_progress,progress_rate,final_goal_error";
+        m_blockProgressCsvPath = EnsureCsvFileReady(m_blockProgressCsvPath, header, blockProgressLogPrefix);
         File.AppendAllText(m_blockProgressCsvPath, row + System.Environment.NewLine);
 
         LogBlockProgress(
@@ -887,19 +967,8 @@ public class PushAgentBasic : Agent
             m_finalBlockGoalDistance
         );
 
-        var dir = Path.GetDirectoryName(m_reliabilityCsvPath);
-        if (!string.IsNullOrEmpty(dir))
-        {
-            Directory.CreateDirectory(dir);
-        }
-
-        var fileExists = File.Exists(m_reliabilityCsvPath);
-        if (!fileExists)
-        {
-            var header = "agent_id,episode_id,training_step,success,end_reason,failure_mode,episode_reward,final_goal_error";
-            File.WriteAllText(m_reliabilityCsvPath, header + System.Environment.NewLine);
-        }
-
+        var header = "agent_id,episode_id,training_step,success,end_reason,failure_mode,episode_reward,final_goal_error";
+        m_reliabilityCsvPath = EnsureCsvFileReady(m_reliabilityCsvPath, header, reliabilityLogPrefix);
         File.AppendAllText(m_reliabilityCsvPath, row + System.Environment.NewLine);
 
         LogReliability(
@@ -982,19 +1051,8 @@ public class PushAgentBasic : Agent
             m_sumAngularSpeed / Mathf.Max(1, m_controlSamples)
         );
 
-        var dir = Path.GetDirectoryName(m_controlQualityCsvPath);
-        if (!string.IsNullOrEmpty(dir))
-        {
-            Directory.CreateDirectory(dir);
-        }
-
-        var fileExists = File.Exists(m_controlQualityCsvPath);
-        if (!fileExists)
-        {
-            var header = "agent_id,episode_id,training_step,success,end_reason,mean_goal_velocity,goal_velocity_variance,goal_velocity_acceleration_variance,goal_velocity_jerk,rotation_variance,action_entropy,repeated_action_ratio,policy_smoothness,control_samples,mean_angular_speed";
-            File.WriteAllText(m_controlQualityCsvPath, header + System.Environment.NewLine);
-        }
-
+        var header = "agent_id,episode_id,training_step,success,end_reason,mean_goal_velocity,goal_velocity_variance,goal_velocity_acceleration_variance,goal_velocity_jerk,rotation_variance,action_entropy,repeated_action_ratio,policy_smoothness,control_samples,mean_angular_speed";
+        m_controlQualityCsvPath = EnsureCsvFileReady(m_controlQualityCsvPath, header, controlQualityLogPrefix);
         File.AppendAllText(m_controlQualityCsvPath, row + System.Environment.NewLine);
 
         LogControlQuality(
@@ -1066,7 +1124,7 @@ public class PushAgentBasic : Agent
 
         var row = string.Format(
             CultureInfo.InvariantCulture,
-            "{0},{1},{2},{3},{4},{5:F4},{6},{7},{8:F4},{9:F4},{10:F4},{11:F4},{12:F4},{13:F4},{14:F4},{15:F4},{16:F4},{17:F4},{18:F4},{19:F4},{20:F4}",
+            "{0},{1},{2},{3},{4},{5:F4},{6},{7},{8:F4},{9:F4},{10:F4},{11:F4},{12:F4},{13:F4},{14:F4},{15},{16:F4},{17:F4},{18:F4},{19:F4},{20:F4},{21:F4},{22:F4},{23:F4},{24:F4},{25:F4},{26:F4}",
             agentId,
             m_episodeId,
             trainingStep,
@@ -1075,10 +1133,16 @@ public class PushAgentBasic : Agent
             m_episodeCumulativeReward,
             m_episodeSteps,
             success ? m_episodeSteps : -1,
+            m_startGoalZoneErrorXZ,
+            m_finalGoalZoneErrorXZ,
+            m_normalizedTaskProgress,
             m_startBlockGoalDistance,
             m_finalBlockGoalDistance,
             m_normalizedBlockProgress,
+            m_successGoalConsistency,
             finalGoalError,
+            m_finalCenterDistanceXZ,
+            m_finalCenterDistanceXYZ,
             m_episodeStartBlockPos.x,
             m_episodeStartBlockPos.y,
             m_episodeStartBlockPos.z,
@@ -1090,32 +1154,23 @@ public class PushAgentBasic : Agent
             m_episodeGoalPos.z
         );
 
-        var dir = Path.GetDirectoryName(m_learningImprovementCsvPath);
-        if (!string.IsNullOrEmpty(dir))
-        {
-            Directory.CreateDirectory(dir);
-        }
-
-        var fileExists = File.Exists(m_learningImprovementCsvPath);
-        if (!fileExists)
-        {
-            var header = "agent_id,episode_id,training_step,success,end_reason,episode_reward,episode_length,time_to_goal,start_block_goal_distance,final_block_goal_distance,normalized_block_progress,final_goal_error,start_block_x,start_block_y,start_block_z,end_block_x,end_block_y,end_block_z,goal_x,goal_y,goal_z";
-            File.WriteAllText(m_learningImprovementCsvPath, header + System.Environment.NewLine);
-        }
-
+        var header = "agent_id,episode_id,training_step,success,end_reason,episode_reward,episode_length,time_to_goal,start_goal_zone_error_xz,final_goal_zone_error_xz,normalized_task_progress,start_block_goal_distance,final_block_goal_distance,normalized_block_progress,success_goal_consistency,final_goal_error,final_center_distance_xz,final_center_distance_xyz,start_block_x,start_block_y,start_block_z,end_block_x,end_block_y,end_block_z,goal_x,goal_y,goal_z";
+        m_learningImprovementCsvPath = EnsureCsvFileReady(m_learningImprovementCsvPath, header, learningImprovementLogPrefix);
         File.AppendAllText(m_learningImprovementCsvPath, row + System.Environment.NewLine);
 
         LogLearningImprovement(
             "end",
             string.Format(
                 CultureInfo.InvariantCulture,
-                "agent={0} episode={1} reason={2} steps={3} reward={4:F4} start_dist={5:F4} final_dist={6:F4} norm_progress={7:F4}",
+                "agent={0} episode={1} reason={2} steps={3} reward={4:F4} start_zone_error_xz={5:F4} final_zone_error_xz={6:F4} norm_task_progress={7:F4} legacy_final_dist={8:F4} legacy_norm_progress={9:F4}",
                 agentId,
                 m_episodeId,
                 m_episodeEndReason,
                 m_episodeSteps,
                 m_episodeCumulativeReward,
-                m_startBlockGoalDistance,
+                m_startGoalZoneErrorXZ,
+                m_finalGoalZoneErrorXZ,
+                m_normalizedTaskProgress,
                 m_finalBlockGoalDistance,
                 m_normalizedBlockProgress
             )
