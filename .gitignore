@@ -104,3 +104,5 @@ coverage.xml
 
 Tools/ci/obj/
 Tools/ci/bin/
+*.dll
+*.bat
