@@ -145,6 +145,40 @@ public class PushAgentBasic : Agent
     float m_repeatedActionRatio = 0f;
     float m_policySmoothness = 0f;
 
+    // Per-frame logging
+    [Header("Per-Frame Logging")]
+    public bool enablePerFrameLogs = true;
+    public string perFrameLogPrefix = "[per_frame]";
+    string m_actionCsvPath;
+    string m_observationCsvPath;
+    string m_runStamp;
+    bool m_obsRowWritten = false;
+    // Cache last action so non-decision frames reuse it
+    int m_lastAction = 0;
+    float m_lastActionX = 0f;
+    float m_lastActionY = 0f;
+    // Reward tracking: now using a pending per-decision reward written on the next rendered frame
+    // Pending decision reward written on next rendered frame (avoids frame-count mismatches)
+    float m_pendingDecisionReward = 0f;
+    bool m_pendingDecisionRewardAvailable = false;
+    // Track cumulative reward at the last decision so we can compute per-decision delta
+    float m_cumulativeRewardAtLastDecision = 0f;
+    // Screenshot capture (replace Unity Recorder)
+    [Header("Per-Frame Screenshot Capture")]
+    public bool enableScreenshotCapture = true;
+    public Camera screenshotCamera;
+    public int screenshotWidth = 360;
+    public int screenshotHeight = 360;
+    // Automatically assemble screenshots into a video after an episode/run
+    [Header("Post-Processing")]
+    public bool autoCreateVideo = false; // set true to run tools/make_video_from_frames.py automatically
+    public int videoFps = 30;
+    // Root directory for screenshots for this run; screenshots will be split into
+    // subfolders every `m_screenshotChunkSize` frames to create per-run chunks.
+    string m_screenshotRootDir;
+    public int m_screenshotChunkSize = 500; // create new subfolder every 500 frames
+    bool m_screenshotAutoAssigned = false;
+
     protected override void Awake()
     {
         base.Awake();
@@ -178,6 +212,80 @@ public class PushAgentBasic : Agent
         m_blockProgressCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "block_progress.csv");
         m_reliabilityCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "reliability.csv");
         m_controlQualityCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "control_quality.csv");
+        // Create per-run stamped CSV filenames inside a `metadata` folder so each Play/run generates separate files
+        m_runStamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
+        m_actionCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "metadata", $"actions_frame_{m_runStamp}.csv");
+        m_observationCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "metadata", $"observations_frame_{m_runStamp}.csv");
+        // Create headers and write an initial marker line so we can detect write failures early
+        try
+        {
+            // Log continuous actions: two dimensions (action_x, action_y)
+            var actionHeaderInit = "timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,action_x,action_y";
+            // Add an is_decision column so downstream tools can filter which rows correspond to decision steps
+            var obsHeaderInit = "timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,is_decision,reward,agent_pos_x,agent_pos_y,agent_pos_z,agent_rot_x,agent_rot_y,agent_rot_z,block_pos_x,block_pos_y,block_pos_z,block_vel_x,block_vel_y,block_vel_z,goal_pos_x,goal_pos_y,goal_pos_z";
+            m_actionCsvPath = EnsureCsvFileReady(m_actionCsvPath, actionHeaderInit, perFrameLogPrefix);
+            m_observationCsvPath = EnsureCsvFileReady(m_observationCsvPath, obsHeaderInit, perFrameLogPrefix);
+
+            var stamp = System.DateTime.Now.ToString("o", CultureInfo.InvariantCulture);
+            // Write a marker line that matches the CSV header column count to avoid malformed rows.
+            var actionMarker = string.Format(CultureInfo.InvariantCulture, "{0},0,0,init,0,0,0,0,0", stamp);
+            // observation now has an extra is_decision column
+            var obsMarker = string.Format(CultureInfo.InvariantCulture, "{0},0,0,init,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0", stamp);
+            File.AppendAllText(m_actionCsvPath, actionMarker + System.Environment.NewLine);
+            File.AppendAllText(m_observationCsvPath, obsMarker + System.Environment.NewLine);
+            // Prepare screenshot root directory for this run; individual subfolders
+            // will be created per chunk (every m_screenshotChunkSize frames).
+            try
+            {
+                m_screenshotRootDir = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "metadata", "recordings", m_runStamp);
+                Directory.CreateDirectory(m_screenshotRootDir);
+                // If no camera assigned in the inspector, default to Camera.main so screenshots are captured.
+                try
+                {
+                    if (screenshotCamera == null)
+                    {
+                        // Try to find a camera tagged 'recorder cam' first (user-specified tag).
+                        try
+                        {
+                            var tagged = GameObject.FindWithTag("recorder cam");
+                            if (tagged != null)
+                            {
+                                var cam = tagged.GetComponent<Camera>();
+                                if (cam != null)
+                                {
+                                    screenshotCamera = cam;
+                                    UnityEngine.Debug.Log($"{perFrameLogPrefix} screenshotCamera found by tag 'recorder cam' -> '{screenshotCamera.name}' for run {m_runStamp}");
+                                }
+                            }
+                        }
+                        catch { }
+
+                        // Fallback to main camera
+                        if (screenshotCamera == null)
+                        {
+                            screenshotCamera = Camera.main;
+                        }
+                    }
+
+                    if (screenshotCamera == null)
+                    {
+                        // Disable capture to avoid silent failures and inform in the Editor log.
+                        enableScreenshotCapture = false;
+                        UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} screenshot capture disabled: no screenshotCamera assigned, no 'recorder cam' found, and Camera.main is null.");
+                    }
+                    else
+                    {
+                        UnityEngine.Debug.Log($"{perFrameLogPrefix} screenshotCamera set to '{screenshotCamera.name}' for run {m_runStamp}");
+                    }
+                }
+                catch { }
+            }
+            catch { }
+        }
+        catch (System.Exception e)
+        {
+            UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} init_write_failed {e.Message}");
+        }
     }
 
     /// <summary>
@@ -211,6 +319,67 @@ public class PushAgentBasic : Agent
         // We use a reward of 5.
         AddReward(5f);
         m_episodeCumulativeReward += 5f;
+
+        // Ensure the per-decision reward delta is captured in the per-frame logs.
+        // Compute delta since last decision and queue it for the next rendered frame,
+        // then flush a per-frame write immediately so the +5 reward is recorded
+        // before EndEpisode resets episode state.
+        var rewardDelta = m_episodeCumulativeReward - m_cumulativeRewardAtLastDecision;
+        m_pendingDecisionReward = rewardDelta;
+        m_pendingDecisionRewardAvailable = true;
+        m_cumulativeRewardAtLastDecision = m_episodeCumulativeReward;
+
+        // Debug: record that we queued a pending reward for the decision
+        UnityEngine.Debug.Log($"{perFrameLogPrefix} queued_goal_reward {m_pendingDecisionReward:F6} episode={m_episodeId} step={m_episodeSteps}");
+
+        if (enablePerFrameLogs)
+        {
+            try
+            {
+                // As a robust fallback, immediately append an observation row for this decision
+                // so the +5 reward is guaranteed to appear in the CSV even if frame ordering
+                // or EndEpisode timing interferes with the Update-driven writer.
+                AppendImmediateObservationRow(m_pendingDecisionReward, /*isDecision=*/1);
+                // Prevent double-consumption by clearing the pending flag (we already wrote it).
+                m_pendingDecisionRewardAvailable = false;
+
+                // Still attempt the regular synchronous per-frame write to keep behavior unchanged
+                WritePerFrameLogs();
+                // Optionally assemble screenshots into a video automatically
+                if (autoCreateVideo && !string.IsNullOrEmpty(m_screenshotRootDir))
+                {
+                    // Don't spawn the python video creation while a trainer is connected
+                    // (Academy.Instance.IsCommunicatorOn == true). Also restrict to Editor
+                    // by default to avoid side-effects during headless training runs.
+                    var safeToRun = true;
+                    try
+                    {
+                        safeToRun = Application.isEditor || Academy.Instance == null || !Academy.Instance.IsCommunicatorOn;
+                    }
+                    catch { safeToRun = Application.isEditor; }
+
+                    if (safeToRun)
+                    {
+                        try
+                        {
+                            RunMakeVideoAsync(m_screenshotRootDir);
+                        }
+                        catch (System.Exception e)
+                        {
+                            UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} auto_video_failed_start {e.Message}");
+                        }
+                    }
+                    else
+                    {
+                        UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} auto_video_skipped training_active or communicator_on");
+                    }
+                }
+            }
+            catch (System.Exception e)
+            {
+                UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} failed_write_on_goal {e.Message}");
+            }
+        }
 
         CaptureEpisodeEndMetrics(true, "goal");
 
@@ -273,6 +442,7 @@ public class PushAgentBasic : Agent
     public override void OnActionReceived(ActionBuffers actionBuffers)
 
     {
+        //UnityEngine.Debug.Log($"[DECISION] frame={Time.frameCount}, step={m_episodeSteps}");
         // Track step count per episode
         m_episodeSteps++;
 
@@ -280,18 +450,245 @@ public class PushAgentBasic : Agent
         MoveAgent(actionBuffers.DiscreteActions);
 
         var currentAction = actionBuffers.DiscreteActions[0];
+    // Cache last action (map discrete -> continuous for logging)
+    MapDiscreteToContinuous(currentAction, out m_lastActionX, out m_lastActionY);
+    m_lastAction = currentAction;
         UpdateControlQualityMetrics(currentAction);
         UpdateAgentEfficiencyMetrics(currentAction);
 
-        // Penalty given each step to encourage agent to finish task quickly.
-        var stepPenalty = -1f / MaxStep;
-        AddReward(stepPenalty);
-        m_episodeCumulativeReward += stepPenalty;
+    // Penalty given each step to encourage agent to finish task quickly.
+    var stepPenalty = -1f / MaxStep;
+    // Apply step penalty every action step (does not change decision timing)
+    AddReward(stepPenalty);
+    m_episodeCumulativeReward += stepPenalty;
+
+    // Decide whether this OnActionReceived corresponds to a decision (DecisionRequester)
+    var isDecisionNow = true;
+    try
+    {
+        var dr = GetComponent<Unity.MLAgents.DecisionRequester>();
+        if (dr != null && Unity.MLAgents.Academy.Instance != null)
+        {
+            isDecisionNow = (Unity.MLAgents.Academy.Instance.StepCount % dr.DecisionPeriod) == dr.DecisionStep;
+        }
+    }
+    catch { isDecisionNow = true; }
+
+    // Only compute and queue per-decision reward delta when this is actually a decision.
+    if (isDecisionNow)
+    {
+        var rewardDelta = m_episodeCumulativeReward - m_cumulativeRewardAtLastDecision;
+        m_pendingDecisionReward = rewardDelta;
+        m_pendingDecisionRewardAvailable = true;
+        // Update cumulative marker for next decision
+        m_cumulativeRewardAtLastDecision = m_episodeCumulativeReward;
+
+        // Immediately append an observation row for this decision so downstream
+        // analysis sees the per-decision delta exactly when the decision is made.
+        if (enablePerFrameLogs)
+        {
+            AppendImmediateObservationRow(m_pendingDecisionReward, /*isDecision=*/1);
+            // Prevent the Update-driven writer from writing the same pending reward again
+            m_pendingDecisionRewardAvailable = false;
+        }
+    }
 
         // If we reached max steps and haven't recorded metrics yet, record as failure (success=0).
         if (m_episodeSteps >= MaxStep && !m_episodeMetricsRecorded)
         {
             CaptureEpisodeEndMetrics(false, "timeout");
+        }
+
+    // Per-frame logging is now done every Update to match rendered frames; we cache the last action above
+    }
+
+    void WritePerFrameLogs(ActionBuffers actionBuffers)
+    {
+    // Delegate to the Update-driven writer which uses cached last-action values.
+    WritePerFrameLogs();
+    }
+
+    // New per-frame Update() to write logs every frame and reuse last action
+    void Update()
+    {
+        if (enablePerFrameLogs)
+        {
+            WritePerFrameLogs();
+        }
+        // If screenshots are enabled but no camera was available at Initialize,
+        // try to auto-assign one at runtime (handles cameras created/activated later).
+        if (enableScreenshotCapture && !m_screenshotAutoAssigned && screenshotCamera == null)
+        {
+            try
+            {
+                var tagged = GameObject.FindWithTag("recorder cam");
+                if (tagged != null)
+                {
+                    var cam = tagged.GetComponent<Camera>();
+                    if (cam != null)
+                    {
+                        screenshotCamera = cam;
+                    }
+                }
+            }
+            catch { }
+
+            if (screenshotCamera == null)
+            {
+                screenshotCamera = Camera.main;
+            }
+
+            if (screenshotCamera != null)
+            {
+                UnityEngine.Debug.Log($"{perFrameLogPrefix} screenshotCamera auto-assigned to '{screenshotCamera.name}' at frame {Time.frameCount}");
+                m_screenshotAutoAssigned = true;
+            }
+        }
+    }
+
+    void MapDiscreteToContinuous(int discreteAction, out float actionX, out float actionY)
+    {
+        actionX = 0f; actionY = 0f;
+        switch (discreteAction)
+        {
+            case 1: // forward
+                actionX = 0f; actionY = 1f;
+                break;
+            case 2: // backward
+                actionX = 0f; actionY = -1f;
+                break;
+            case 3: // rotate left, no linear movement
+                actionX = 0f; actionY = 0f;
+                break;
+            case 4: // rotate right, no linear movement
+                actionX = 0f; actionY = 0f;
+                break;
+            case 5: // strafe left
+                actionX = -0.75f; actionY = 0f;
+                break;
+            case 6: // strafe right
+                actionX = 0.75f; actionY = 0f;
+                break;
+            default:
+                actionX = 0f; actionY = 0f;
+                break;
+        }
+    }
+
+    // Overloaded WritePerFrameLogs with no arguments to be called from Update
+    void WritePerFrameLogs()
+    {
+        //UnityEngine.Debug.Log($"{perFrameLogPrefix} WritePerFrameLogs called, enableScreenshotCapture={enableScreenshotCapture}, screenshotCamera={screenshotCamera?.name}");
+        
+    // Build CSV paths and headers (action has two continuous dims) — include frame_count and realtime_since_start
+    var actionHeader = "timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,action_x,action_y";
+    // Add 'is_decision' and 'reward' columns to observations (reward is non-zero only on decision frames)
+    var obsHeader = "timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,is_decision,reward,agent_pos_x,agent_pos_y,agent_pos_z,agent_rot_x,agent_rot_y,agent_rot_z,block_pos_x,block_pos_y,block_pos_z,block_vel_x,block_vel_y,block_vel_z,goal_pos_x,goal_pos_y,goal_pos_z";
+
+        m_actionCsvPath = EnsureCsvFileReady(m_actionCsvPath, actionHeader, perFrameLogPrefix);
+        m_observationCsvPath = EnsureCsvFileReady(m_observationCsvPath, obsHeader, perFrameLogPrefix);
+
+        var timestamp = System.DateTime.Now.ToString("o", CultureInfo.InvariantCulture);
+        var frameCount = Time.frameCount;
+        var realtime = Time.realtimeSinceStartup.ToString("F6", CultureInfo.InvariantCulture);
+        var agentId = GetAgentId();
+        var trainingStep = GetTrainingStep();
+        var stepIndex = m_episodeSteps;
+
+        float actionX = m_lastActionX;
+        float actionY = m_lastActionY;
+
+        var actionRow = string.Format(CultureInfo.InvariantCulture, "{0},{1},{2},{3},{4},{5},{6},{7:F6},{8:F6}", timestamp, frameCount, realtime, agentId, m_episodeId, trainingStep, stepIndex, actionX, actionY);
+
+        var agentPos = transform.position;
+        var agentRot = transform.eulerAngles;
+        var blockPos = block != null ? block.transform.position : Vector3.zero;
+        var blockVel = m_BlockRb != null ? m_BlockRb.linearVelocity : Vector3.zero;
+        var goalPos = goal != null ? goal.transform.position : Vector3.zero;
+
+        // Reward for this frame: if a pending decision reward exists, consume it on this rendered frame.
+        var rewardForFrame = 0f;
+        var isDecisionForFrame = 0; // 1 if this rendered frame corresponds to a decision
+        if (m_pendingDecisionRewardAvailable)
+        {
+            rewardForFrame = m_pendingDecisionReward;
+            m_pendingDecisionRewardAvailable = false;
+            isDecisionForFrame = 1;
+        }
+
+        var obsRow = string.Format(
+            CultureInfo.InvariantCulture,
+            "{0},{1},{2},{3},{4},{5},{6},{7},{8:F6},{9:F4},{10:F4},{11:F4},{12:F4},{13:F4},{14:F4},{15:F4},{16:F4},{17:F4},{18:F4},{19:F4},{20:F4},{21:F4},{22:F4}",
+            timestamp,
+            frameCount,
+            realtime,
+            agentId,
+            m_episodeId,
+            trainingStep,
+            stepIndex,
+            isDecisionForFrame,
+            rewardForFrame,
+            agentPos.x,
+            agentPos.y,
+            agentPos.z,
+            agentRot.x,
+            agentRot.y,
+            agentRot.z,
+            blockPos.x,
+            blockPos.y,
+            blockPos.z,
+            blockVel.x,
+            blockVel.y,
+            blockVel.z,
+            goalPos.x,
+            goalPos.y,
+            goalPos.z
+        );
+
+        try
+        {
+            File.AppendAllText(m_actionCsvPath, actionRow + System.Environment.NewLine);
+            File.AppendAllText(m_observationCsvPath, obsRow + System.Environment.NewLine);
+
+            if (!m_obsRowWritten)
+            {
+                UnityEngine.Debug.Log($"{perFrameLogPrefix} wrote_action_obs action_path={m_actionCsvPath} obs_path={m_observationCsvPath} step={stepIndex}");
+                m_obsRowWritten = true;
+            }
+            // Save screenshot for this frame if enabled (same as the ActionBuffers overload)
+            try
+            {
+                if (enableScreenshotCapture && screenshotCamera != null && !string.IsNullOrEmpty(m_screenshotRootDir))
+                {
+                    // Use a single chunk folder per run to avoid splitting frames across folders.
+                    var chunkFolder = Path.Combine(m_screenshotRootDir, "chunk_000001");
+                    if (!Directory.Exists(chunkFolder)) Directory.CreateDirectory(chunkFolder);
+
+                    var tex = new RenderTexture(screenshotWidth, screenshotHeight, 24);
+                    screenshotCamera.targetTexture = tex;
+                    var prev = RenderTexture.active;
+                    RenderTexture.active = tex;
+                    screenshotCamera.Render();
+                    var read = new Texture2D(screenshotWidth, screenshotHeight, TextureFormat.RGB24, false);
+                    read.ReadPixels(new Rect(0, 0, screenshotWidth, screenshotHeight), 0, 0);
+                    read.Apply();
+                    screenshotCamera.targetTexture = null;
+                    RenderTexture.active = prev;
+                    var bytes = read.EncodeToPNG();
+                    var fname = Path.Combine(chunkFolder, string.Format("frame_{0:D06}.png", frameCount));
+                    File.WriteAllBytes(fname, bytes);
+                    UnityEngine.Object.DestroyImmediate(read);
+                    UnityEngine.Object.DestroyImmediate(tex);
+                }
+            }
+            catch (System.Exception e)
+            {
+                UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} failed_screenshot exception={e.ToString()}");
+            }
+        }
+        catch (System.Exception e)
+        {
+            UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} failed_write_action_obs exception={e.ToString()}");
         }
     }
 
@@ -351,6 +748,7 @@ public class PushAgentBasic : Agent
         // Reset episode-tracking state
         m_episodeSteps = 0;
         m_episodeCumulativeReward = 0f;
+    m_cumulativeRewardAtLastDecision = 0f;
         m_episodeMetricsRecorded = false;
         m_episodeEndReason = "unknown";
 
@@ -736,6 +1134,119 @@ public class PushAgentBasic : Agent
         File.WriteAllText(redirectedPath, expectedHeader + System.Environment.NewLine);
         UnityEngine.Debug.LogWarning($"{logPrefix} header_mismatch existing_csv={currentPath} redirected_csv={redirectedPath}");
         return redirectedPath;
+    }
+
+    // Immediately append a single observation-style row to the observation CSV.
+    // This is used to guarantee that per-decision rewards (e.g. goal +5) appear
+    // in the file even if EndEpisode timing prevents the Update-driven writer
+    // from consuming the queued reward.
+    void AppendImmediateObservationRow(float reward, int isDecision)
+    {
+        try
+        {
+            var timestamp = System.DateTime.Now.ToString("o", CultureInfo.InvariantCulture);
+            var frameCount = Time.frameCount;
+            var realtime = Time.realtimeSinceStartup.ToString("F6", CultureInfo.InvariantCulture);
+            var agentId = GetAgentId();
+            var trainingStep = GetTrainingStep();
+            var stepIndex = m_episodeSteps;
+
+            var agentPos = transform.position;
+            var agentRot = transform.eulerAngles;
+            var blockPos = block != null ? block.transform.position : Vector3.zero;
+            var blockVel = m_BlockRb != null ? m_BlockRb.linearVelocity : Vector3.zero;
+            var goalPos = goal != null ? goal.transform.position : Vector3.zero;
+
+            var obsRow = string.Format(
+                CultureInfo.InvariantCulture,
+                "{0},{1},{2},{3},{4},{5},{6},{7},{8:F6},{9:F4},{10:F4},{11:F4},{12:F4},{13:F4},{14:F4},{15:F4},{16:F4},{17:F4},{18:F4},{19:F4},{20:F4},{21:F4},{22:F4},{23:F4}",
+                timestamp,
+                frameCount,
+                realtime,
+                agentId,
+                m_episodeId,
+                trainingStep,
+                stepIndex,
+                isDecision,
+                reward,
+                agentPos.x,
+                agentPos.y,
+                agentPos.z,
+                agentRot.x,
+                agentRot.y,
+                agentRot.z,
+                blockPos.x,
+                blockPos.y,
+                blockPos.z,
+                blockVel.x,
+                blockVel.y,
+                blockVel.z,
+                goalPos.x,
+                goalPos.y,
+                goalPos.z
+            );
+
+            m_observationCsvPath = EnsureCsvFileReady(m_observationCsvPath, "timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,is_decision,reward,agent_pos_x,agent_pos_y,agent_pos_z,agent_rot_x,agent_rot_y,agent_rot_z,block_pos_x,block_pos_y,block_pos_z,block_vel_x,block_vel_y,block_vel_z,goal_pos_x,goal_pos_y,goal_pos_z", perFrameLogPrefix);
+            File.AppendAllText(m_observationCsvPath, obsRow + System.Environment.NewLine);
+            UnityEngine.Debug.Log($"{perFrameLogPrefix} append_immediate_obs is_decision={isDecision} reward={reward:F6} path={m_observationCsvPath}");
+        }
+        catch (System.Exception e)
+        {
+            UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} failed_append_immediate_obs {e.Message}");
+        }
+    }
+
+    // Asynchronously run the Python tool to assemble screenshots into a video.
+    // This uses the system 'python' executable and the repository's tools/make_video_from_frames.py script.
+    void RunMakeVideoAsync(string screenshotRoot)
+    {
+        // Run in a thread-pool thread so we don't block Unity main thread.
+        System.Threading.Tasks.Task.Run(() =>
+        {
+            try
+            {
+                var repoRoot = Application.dataPath.Replace("/Assets", "").Replace("\\Assets", "");
+                var scriptPath = System.IO.Path.Combine(repoRoot, "tools", "make_video_from_frames.py");
+                if (!System.IO.File.Exists(scriptPath))
+                {
+                    UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} auto_video_script_missing script={scriptPath}");
+                    return;
+                }
+
+                var psi = new System.Diagnostics.ProcessStartInfo();
+                psi.FileName = "python";
+                psi.Arguments = string.Format("\"{0}\" \"{1}\" --fps {2}", scriptPath, screenshotRoot, videoFps);
+                psi.UseShellExecute = false;
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardError = true;
+                psi.CreateNoWindow = true;
+
+                using (var proc = new System.Diagnostics.Process())
+                {
+                    proc.StartInfo = psi;
+                    proc.OutputDataReceived += (sender, e) => { if (!string.IsNullOrEmpty(e.Data)) UnityEngine.Debug.Log($"{perFrameLogPrefix} ffmpeg_out {e.Data}"); };
+                    proc.ErrorDataReceived += (sender, e) => { if (!string.IsNullOrEmpty(e.Data)) UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} ffmpeg_err {e.Data}"); };
+                    proc.Start();
+                    proc.BeginOutputReadLine();
+                    proc.BeginErrorReadLine();
+                    // Wait but with timeout to avoid runaway blocking threads; large videos may take time.
+                    var finished = proc.WaitForExit(600000); // 10 minutes
+                    if (!finished)
+                    {
+                        try { proc.Kill(); } catch { }
+                        UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} auto_video_timeout script={scriptPath}");
+                    }
+                    else
+                    {
+                        UnityEngine.Debug.Log($"{perFrameLogPrefix} auto_video_completed script={scriptPath} exitCode={proc.ExitCode}");
+                    }
+                }
+            }
+            catch (System.Exception e)
+            {
+                UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} auto_video_exception {e.Message}");
+            }
+        });
     }
 
     void CaptureEpisodeEndMetrics(bool success, string endReason)

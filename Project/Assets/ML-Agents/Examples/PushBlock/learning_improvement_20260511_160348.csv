@@ -1,0 +1,5 @@
+agent_id,episode_id,training_step,success,end_reason,episode_reward,episode_length,time_to_goal,start_goal_zone_error_xz,final_goal_zone_error_xz,normalized_task_progress,start_block_goal_distance,final_block_goal_distance,normalized_block_progress,success_goal_consistency,final_goal_error,final_center_distance_xz,final_center_distance_xyz,start_block_x,start_block_y,start_block_z,end_block_x,end_block_y,end_block_z,goal_x,goal_y,goal_z
+Agent,1,109,1,goal,4.9782,109,109,13.0061,0.0000,1.0000,16.9196,11.1092,0.3434,1.0000,11.10917,11.1018,11.1092,-5.4058,1.0000,-5.6758,7.6986,0.3750,-10.7425,10.5000,-0.0300,0.0000
+Agent,2,169,1,goal,4.9880,60,60,2.8378,0.0000,1.0000,8.2847,6.7385,0.1866,1.0000,6.738453,6.7263,6.7385,4.7625,1.0000,5.8870,7.6324,0.3750,6.0844,10.5000,-0.0300,0.0000
+Agent,3,213,1,goal,4.9912,44,44,8.8103,0.0000,1.0000,11.7591,2.9649,0.7479,1.0000,2.964854,2.9371,2.9649,-0.2993,1.0000,1.2101,-0.6060,0.3750,-7.6261,0.0000,-0.0300,-10.5000
+Agent,4,259,1,goal,4.9908,46,46,5.6939,0.0000,1.0000,10.3309,6.9620,0.3261,1.0000,6.961979,6.9502,6.9620,5.6406,1.0000,-1.9064,6.3362,0.3750,-7.6438,0.0000,-0.0300,-10.5000
