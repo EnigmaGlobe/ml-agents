@@ -1188,7 +1188,7 @@ public class PushAgentBasic : Agent
 
             m_observationCsvPath = EnsureCsvFileReady(m_observationCsvPath, "timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,is_decision,reward,agent_pos_x,agent_pos_y,agent_pos_z,agent_rot_x,agent_rot_y,agent_rot_z,block_pos_x,block_pos_y,block_pos_z,block_vel_x,block_vel_y,block_vel_z,goal_pos_x,goal_pos_y,goal_pos_z", perFrameLogPrefix);
             File.AppendAllText(m_observationCsvPath, obsRow + System.Environment.NewLine);
-            UnityEngine.Debug.Log($"{perFrameLogPrefix} append_immediate_obs is_decision={isDecision} reward={reward:F6} path={m_observationCsvPath}");
+            //UnityEngine.Debug.Log($"{perFrameLogPrefix} append_immediate_obs is_decision={isDecision} reward={reward:F6} path={m_observationCsvPath}");
         }
         catch (System.Exception e)
         {
