@@ -1,0 +1,8 @@
+computation_status,training_quality,auc_verdict,final_performance_verdict,stability_verdict,stability_confidence,learning_slope_verdict,passed_checks,total_checks,original_episode_count,filtered_episode_count,applied_start_row,applied_end_row,applied_start_step,applied_end_step,rolling_window_size,final_window_size,auc_raw,auc_normalized,final_window_mean_progress,final_window_iqm_progress,final_window_ci_lower,final_window_ci_upper,final_window_mean_reward,final_window_mean_goal_error,final_window_success_rate,final_window_sd_progress,final_window_iqr_progress,final_window_cv_progress,learning_slope,learning_slope_per_100k_steps,learning_slope_intercept,learning_slope_r2,learning_slope_pvalue
+PASS,PASS_WITH_WARNING,PASS,PASS,OUTLIER_WARNING,MEDIUM,WEAK,4,4,1254,1254,2,1255,5000,2496249,50,126,800300.28567310795,0.32124459886310358,0.70858174603174595,1,1,1,4.2057150793650777,2.3859698412698411,0.88095238095238093,0.9735343558233478,0,1.3739196095234034,4.2731205320522869E-07,0.042731205320522866,-0.17410393118569678,0.72229943548385178,0
+
+check_name,passed,detail
+AUC computed,1,normalized_auc=0.3212
+Final window computed,1,"final_iqm=1, ci=[1, 1]"
+Stability computed,1,"sd=0.9735, iqr=0, cv=1.3739"
+Learning slope computed,1,"slope=0, r2=0.7223"

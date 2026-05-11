@@ -42,6 +42,11 @@ Use stable, explicit names.
 
 Example:
 
+- Unity stat key: `PushBlock/normalized_task_progress`
+- CSV column: `normalized_task_progress`
+
+Legacy debug-only example:
+
 - Unity stat key: `PushBlock/normalized_block_progress`
 - CSV column: `normalized_block_progress`
 
@@ -141,6 +146,12 @@ Supporting documents:
 
 These answer: is the agent improving, how fast, and how stable is that improvement?
 
+Important warning:
+
+- legacy center-distance metrics such as `normalized_block_progress` and `final_goal_error` are not semantically aligned with collider-contact success
+- for learning-improvement judgments, the preferred fields are `normalized_task_progress` and `final_goal_zone_error_xz`
+- until code is updated, any fail result derived mainly from legacy center-distance fields should be interpreted as `FAIL with metric-validity warning`
+
 | Metric | Definition | Implementation concept | Why useful |
 |---|---|---|---|
 | Learning slope | Slope of `performance_metric ~ training_step` | Run linear regression on a rolling-window metric such as normalized progress or success probability | Measures improvement speed, not only final result |
@@ -159,6 +170,17 @@ time_to_threshold = first training_step where rolling_success >= 0.80
 final_performance = mean(metric in final 10% episodes)
 learning_stability = sd(metric in final 10% episodes)
 performance_drop_index = max(rolling_metric) - final(rolling_metric)
+```
+
+Preferred learning metric names for the revised design:
+
+```text
+normalized_task_progress =
+  (start_goal_zone_error_xz - final_goal_zone_error_xz)
+  / max(start_goal_zone_error_xz, epsilon)
+
+final_goal_zone_error_xz =
+  distance from the block collider boundary to the goal collider boundary on the XZ plane
 ```
 
 #### AUC specification

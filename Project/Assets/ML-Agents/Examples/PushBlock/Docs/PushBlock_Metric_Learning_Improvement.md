@@ -21,11 +21,12 @@ In scope:
 - final-window performance
 - final-window stability
 - performance drop after peak
+- metric-validity checks for distance-based task progress
 
 Out of scope:
 
 - detailed movement efficiency
-- collision quality
+- collision quality outside the success condition
 - control smoothness
 - multi-agent ranking logic
 
@@ -53,43 +54,123 @@ Current recorded stats:
 
 These values are enough for a basic training curve, but not enough for a research-grade learning analysis.
 
-To support the primary learning metric, the episode export must also include:
+To support the revised learning metric, the episode export should include:
 
 - `agent_id`
 - `episode_id`
 - `training_step`
+- `start_goal_zone_error_xz`
+- `final_goal_zone_error_xz`
+- `normalized_task_progress`
+- `success_goal_consistency`
+
+Recommended debug-only fields:
+
 - `start_block_goal_distance`
 - `final_block_goal_distance`
 - `normalized_block_progress`
 - `final_goal_error`
+- `final_center_distance_xz`
+- `final_center_distance_xyz`
+- `goal_instance_id`
+- `block_instance_id`
+- `scored_goal_name`
 
-## 3. Primary Learning Signal
+## 3. Why The Old Distance Metrics Are No Longer Primary
 
-The primary learning metric should be `normalized_block_progress`.
+The previous learning-improvement draft treated these fields as primary:
+
+- `normalized_block_progress`
+- `final_goal_error`
+
+Those metrics used center-to-center distance:
+
+```text
+final_goal_error =
+distance(block.transform.position, goal.transform.position)
+```
+
+That definition does not match the actual success condition in PushBlock.
+
+Current success semantics:
+
+- `success = 1` when the block collider touches the goal collider
+
+Current legacy distance semantics:
+
+- `final_goal_error = 3D distance from the block transform center to the goal transform center`
+
+These are not the same thing. Because of that mismatch, successful episodes can still show:
+
+- large `final_goal_error`
+- negative `normalized_block_progress`
+- misleading reward-progress correlation
+
+This is why old center-distance metrics must be downgraded to debug-only fields.
+
+## 4. Primary Learning Signal
+
+The primary learning metric should now be `normalized_task_progress`.
 
 Definition:
 
 ```text
-normalized_block_progress =
-(start_block_goal_distance - final_block_goal_distance)
-/ start_block_goal_distance
+normalized_task_progress =
+(start_goal_zone_error_xz - final_goal_zone_error_xz)
+/ max(start_goal_zone_error_xz, epsilon)
 ```
+
+Where:
+
+- `start_goal_zone_error_xz` = the XZ-plane distance from the block collider boundary to the goal collider boundary at episode start
+- `final_goal_zone_error_xz` = the same XZ-plane goal-zone error at episode end
+- `epsilon` = a very small positive value used only to avoid division by zero
 
 Why it is primary:
 
 - it is continuous
 - it works even when the agent fails
-- it measures task progress directly
+- it is consistent with the success condition
+- it measures progress toward the success zone, not toward an arbitrary transform center
 - it is less ambiguous than reward
 
 Interpretation:
 
-- `1.00` means the block reached or nearly reached the goal
-- `0.50` means the block covered about half the original distance
+- `1.00` means the block reached the success zone
+- `0.50` means the remaining goal-zone error was reduced by half
 - `0.00` means no useful progress
-- `< 0` means the block ended farther from the goal
+- `< 0` means the block ended farther from the success zone
 
-## 4. Why Reward Is Not Enough
+## 5. Goal-Zone Error Definition
+
+Distance for learning-improvement should be defined on the XZ plane, not by 3D center-to-center distance.
+
+Recommended definition:
+
+```text
+goal_zone_error_xz =
+distance between block collider boundary and goal collider boundary on the XZ plane
+```
+
+Interpretation:
+
+- `0` means the block is touching or overlapping the success zone
+- `> 0` means the block has not yet reached the success zone
+
+Recommended implementation concept:
+
+- use collider bounds or another collider-aware geometric check
+- measure boundary-to-boundary gap on the XZ plane
+- do not use `Vector3.Distance(block.position, goal.position)` as the primary task error
+
+Recommended success-aligned rule:
+
+```text
+if success == 1,
+final_goal_zone_error_xz should be 0
+```
+
+## 6. Why Reward Is Not Enough
 
 Reward in PushBlock can improve for several different reasons:
 
@@ -108,10 +189,11 @@ Recommended secondary signals:
 - `rolling_success_rate`
 - `episode_reward`
 - `episode_length`
+- `time_to_goal`
 
-## 5. Metrics
+## 7. Metrics
 
-### 5.1 Learning Slope
+### 7.1 Learning Slope
 
 Definition:
 
@@ -121,7 +203,7 @@ learning_slope = slope(metric ~ training_step)
 
 Recommended input metric:
 
-- rolling `normalized_block_progress`
+- rolling `normalized_task_progress`
 
 Secondary inputs:
 
@@ -143,7 +225,7 @@ Implementation note:
 - compute slope on a rolling-window metric, not on raw noisy episodes
 - keep the rolling window fixed across agents
 
-### 5.2 AUC of Performance Curve
+### 7.2 AUC of Performance Curve
 
 Definition:
 
@@ -154,7 +236,7 @@ normalized_AUC = AUC / (last_step - first_step)
 
 Recommended input metric:
 
-- rolling `normalized_block_progress`
+- rolling `normalized_task_progress`
 
 What it measures:
 
@@ -171,7 +253,7 @@ Implementation note:
 - compute AUC per agent
 - normalize by training length so runs of different duration can be compared
 
-### 5.3 Time-to-Threshold
+### 7.3 Time-to-Threshold
 
 Definition:
 
@@ -183,7 +265,7 @@ first training_step where rolling_metric >= threshold
 Recommended thresholds:
 
 - `rolling_success_rate >= 0.80`
-- `rolling_progress >= 0.80`
+- `rolling_normalized_task_progress >= 0.80`
 
 What it measures:
 
@@ -199,7 +281,7 @@ Implementation note:
 - use sustained threshold detection if possible
 - require several consecutive windows above threshold to avoid a one-window spike
 
-### 5.4 Final Performance Window
+### 7.4 Final Performance Window
 
 Definition:
 
@@ -209,10 +291,10 @@ final_performance = mean(metric in final 10% of episodes)
 
 Recommended metrics:
 
-- `normalized_block_progress`
+- `normalized_task_progress`
 - `success`
 - `episode_reward`
-- `final_goal_error`
+- `final_goal_zone_error_xz`
 
 What it measures:
 
@@ -227,7 +309,7 @@ Implementation note:
 
 - also consider a final fixed-step window if two runs have different episode counts
 
-### 5.5 Learning Stability
+### 7.5 Learning Stability
 
 Definition:
 
@@ -238,9 +320,9 @@ learning_stability_iqr = IQR(metric in final 10% episodes)
 
 Recommended metrics:
 
-- `normalized_block_progress`
+- `normalized_task_progress`
 - `episode_reward`
-- `final_goal_error`
+- `final_goal_zone_error_xz`
 - `success`
 
 What it measures:
@@ -257,7 +339,7 @@ Implementation note:
 - report a mean together with SD or IQR
 - do not report stability alone
 
-### 5.6 Performance Drop Index
+### 7.6 Performance Drop Index
 
 Definition:
 
@@ -268,7 +350,7 @@ relative_performance_drop = (max_rolling_metric - final_rolling_metric) / max_ro
 
 Recommended metrics:
 
-- rolling `normalized_block_progress`
+- rolling `normalized_task_progress`
 - rolling `success_rate`
 - rolling `episode_reward`
 
@@ -285,13 +367,50 @@ Implementation note:
 
 - report both absolute and relative drop when possible
 
-## 6. TensorBoard Comparison
+## 8. Metric Validity Check
+
+Before assigning PASS, WARN, or FAIL, the learning-improvement analysis should run a metric-validity check.
+
+Purpose:
+
+- confirm that success and distance-based metrics use the same task semantics
+- detect cases where the success trigger fires but the distance metric still claims the block is far from the goal
+- prevent false failure conclusions caused by invalid behavior metrics
+
+Required validity checks:
+
+- `mean(final_goal_zone_error_xz where success == 1)`
+- `proportion(success == 1 and final_goal_zone_error_xz > tolerance)`
+- `proportion(success == 1 and normalized_task_progress < 0)`
+
+Recommended debug checks:
+
+- `mean(final_center_distance_xz where success == 1)`
+- `mean(final_center_distance_xyz where success == 1)`
+- `proportion(success == 1 and normalized_block_progress < 0)`
+
+Recommended warning rule:
+
+```text
+If successful episodes often have large goal-zone error
+or successful episodes often have negative normalized task progress,
+flag: FAIL with metric-validity warning
+```
+
+Recommended interpretation text:
+
+```text
+Current status: FAIL with metric-validity warning.
+Success was recorded, but the distance-based task-progress metrics remain semantically inconsistent with the success condition.
+```
+
+## 9. TensorBoard Comparison
 
 Learning improvement should be compared against trainer-side diagnostics, but not treated as identical to them.
 
 Useful comparisons:
 
-- `normalized_block_progress` vs cumulative reward
+- `normalized_task_progress` vs cumulative reward
 - `rolling_success_rate` vs cumulative reward
 - `learning_stability` vs value loss
 - `final_performance_window` vs value estimate
@@ -303,7 +422,7 @@ Important rule:
 
 - correlation does not prove causation
 
-## 7. Logging Requirements
+## 10. Logging Requirements
 
 Each episode row should contain:
 
@@ -313,22 +432,34 @@ Each episode row should contain:
 - `episode_reward`
 - `episode_length`
 - `success`
-- `start_block_goal_distance`
-- `final_block_goal_distance`
-- `normalized_block_progress`
-- `final_goal_error`
+- `start_goal_zone_error_xz`
+- `final_goal_zone_error_xz`
+- `normalized_task_progress`
 
 Recommended additional fields:
 
+- `time_to_goal`
 - `run_id`
 - `seed`
 - `environment_id`
 - `spawn_condition_id`
 
+Recommended debug-only fields:
+
+- `start_block_goal_distance`
+- `final_block_goal_distance`
+- `normalized_block_progress`
+- `final_goal_error`
+- `final_center_distance_xz`
+- `final_center_distance_xyz`
+- `goal_instance_id`
+- `block_instance_id`
+- `scored_goal_name`
+
 Derived later in analysis:
 
 - `rolling_success_rate`
-- `rolling_progress`
+- `rolling_normalized_task_progress`
 - `rolling_reward`
 - `learning_slope`
 - `AUC`
@@ -337,13 +468,14 @@ Derived later in analysis:
 - `learning_stability`
 - `performance_drop_index`
 
-## 8. Code Path
+## 11. Code Path
 
 The learning-improvement pipeline should follow this flow:
 
 1. `OnEpisodeBegin()`
    - reset counters
-   - capture the start block-goal distance
+   - capture `start_goal_zone_error_xz`
+   - capture debug center-distance fields if needed
    - assign episode identity
 
 2. `OnActionReceived()`
@@ -353,25 +485,33 @@ The learning-improvement pipeline should follow this flow:
 
 3. `ScoredAGoal()`
    - mark success
-   - capture the final block-goal distance
-   - compute normalized progress
+   - capture final block state before `EndEpisode()`
+   - capture `final_goal_zone_error_xz`
+   - compute `normalized_task_progress`
    - export the episode row
    - end the episode
 
 4. Timeout branch in `OnActionReceived()`
    - mark failure
-   - capture the final block-goal distance
-   - compute normalized progress
+   - capture final block state
+   - capture `final_goal_zone_error_xz`
+   - compute `normalized_task_progress`
    - export the episode row
    - end the episode
 
-## 9. Safety Rule
+Critical rules:
 
-If `start_block_goal_distance` is zero or very close to zero, exclude the episode or mark it invalid.
+- final metrics must be captured before reset occurs
+- success logic and distance logic must use the same goal definition
+- center-distance values are debug fields only if success is defined by collider contact
+
+## 12. Safety Rule
+
+If `start_goal_zone_error_xz` is zero or very close to zero, exclude the episode or mark it invalid.
 
 That prevents division errors and avoids inflating progress on degenerate spawn cases.
 
-## 10. Multi-Agent Extension
+## 13. Multi-Agent Extension
 
 For later multi-agent comparison, the same metric definitions must be reused for every agent.
 
@@ -390,7 +530,7 @@ Then compare:
 - stability by agent
 - performance drop by agent
 
-## 11. Recommended Reporting
+## 14. Recommended Reporting
 
 For each agent, report:
 
@@ -400,10 +540,11 @@ For each agent, report:
 - final-window mean
 - final-window SD or IQR
 - performance drop index
+- metric-validity warning status
 
-This gives a complete picture of learning speed, stability, and robustness.
+This gives a complete picture of learning speed, stability, robustness, and metric health.
 
-## 12. Milestone Plan
+## 15. Milestone Plan
 
 This section defines the implementation roadmap for this metric group.
 
@@ -417,15 +558,15 @@ Scope:
 
 - keep the current episode reward and success logging
 - add episode export for `agent_id`, `episode_id`, and `training_step`
-- log `start_block_goal_distance` and `final_block_goal_distance`
-- compute `normalized_block_progress`
+- log `start_goal_zone_error_xz` and `final_goal_zone_error_xz`
+- compute `normalized_task_progress`
 - compute `rolling_success_rate`
 - compute `learning_slope`
 
 Success criteria:
 
 - we can generate a basic learning curve
-- we can compare reward with actual block progress
+- we can compare reward with actual task progress
 - the spec is backed by real episode data
 
 ### Milestone 2: Full Single-Agent Metrics
@@ -441,7 +582,8 @@ Scope:
 - compute final performance window
 - compute learning stability
 - compute performance drop index
-- report normalized progress alongside reward, success, and episode length
+- add metric-validity checks
+- report normalized task progress alongside reward, success, and episode length
 
 Success criteria:
 
@@ -467,3 +609,20 @@ Success criteria:
 - agents can be ranked fairly
 - individual learning curves are not hidden by averages
 - the same metric definitions work across all agents
+
+## 16. Current Interpretation Rule
+
+Until the Unity-side metric definitions are updated in code, any learning-improvement result that depends heavily on:
+
+- `normalized_block_progress`
+- `final_goal_error`
+- `goal_error_reduction_raw`
+- `reward_progress_correlation`
+
+should be labeled:
+
+```text
+FAIL with metric-validity warning
+```
+
+This is the correct interim interpretation when success is defined by collider contact but the distance-based metrics still use transform-center distance.

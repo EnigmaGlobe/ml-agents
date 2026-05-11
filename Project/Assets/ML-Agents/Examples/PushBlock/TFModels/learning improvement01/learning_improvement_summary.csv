@@ -1,0 +1,10 @@
+status,passed_checks,total_checks,original_episode_count,filtered_episode_count,applied_start_row,applied_end_row,applied_start_step,applied_end_step,aligned_windows,aligned_final_window_size,raw_episode_window_size,learning_slope,final_progress_raw,final_success_rate_raw,final_success_rate_aligned,final_goal_error,goal_error_reduction_raw,performance_drop_index,reward_progress_correlation,final_progress_stability_raw
+FAIL,0,6,749,647,2,648,58,2499896,8,2,65,-7.2661410261120899E-07,-0.46411384615384621,0.36923076923076925,0.40740740740740738,16.049324615384609,-3.7261938461538442,0.24321356481481482,-0.53548874984831829,1.004084971255218
+
+check_name,passed,detail
+Positive learning slope,0,slope=0; expected > 0
+Final progress good,0,final_progress_raw=-0.4641 using last 65 episodes; expected >= 0.70
+Final success good,0,final_success_raw=0.3692 using last 65 episodes; expected >= 0.80
+Goal error reduced,0,goal_error_reduction_raw=-3.7262 using first/last 65 episodes; expected > 0
+No large performance drop,0,drop_index=0.2432 using aligned progress buckets; expected <= 0.15
+Reward-progress aligned,0,reward_progress_corr=-0.5355; expected > 0.50

@@ -660,6 +660,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 318490717}
+  - component: {fileID: 318490718}
   m_Layer: 0
   m_Name: UnityEngine-Recorder
   m_TagString: Untagged
@@ -684,6 +685,26 @@ Transform:
   - {fileID: 1265651286}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &318490718
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 318490716}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7c7f7e6d1ed42c5b9e3f6a2c1d4a8f0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  camerasToRecord: []
+  outputWidth: 1920
+  outputHeight: 1080
+  frameRate: 60
+  outputFolderPath: Recordings/PushBlock
+  outputFilePrefix: PushBlock_Record
+  captureAudio: 0
+  captureAlpha: 0
 --- !u!1001 &331588493
 PrefabInstance:
   m_ObjectHideFlags: 0
