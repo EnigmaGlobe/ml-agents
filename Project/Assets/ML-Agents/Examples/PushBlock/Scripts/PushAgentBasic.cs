@@ -176,6 +176,9 @@ public class PushAgentBasic : Agent
     // Root directory for screenshots for this run; screenshots will be split into
     // subfolders every `m_screenshotChunkSize` frames to create per-run chunks.
     string m_screenshotRootDir;
+    // Root folder for this run (metadata/{runStamp}) and a data folder for CSVs & mp4
+    string m_runRoot;
+    string m_dataDir;
     public int m_screenshotChunkSize = 500; // create new subfolder every 500 frames
     bool m_screenshotAutoAssigned = false;
 
@@ -212,10 +215,14 @@ public class PushAgentBasic : Agent
         m_blockProgressCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "block_progress.csv");
         m_reliabilityCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "reliability.csv");
         m_controlQualityCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "control_quality.csv");
-        // Create per-run stamped CSV filenames inside a `metadata` folder so each Play/run generates separate files
-        m_runStamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
-        m_actionCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "metadata", $"actions_frame_{m_runStamp}.csv");
-        m_observationCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "metadata", $"observations_frame_{m_runStamp}.csv");
+    // Create a per-run folder under metadata so each Play/run keeps its artifacts together
+    m_runStamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
+    m_runRoot = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "metadata", m_runStamp);
+    m_dataDir = Path.Combine(m_runRoot, "data_training");
+    Directory.CreateDirectory(m_dataDir);
+    // CSVs and the final mp4 will be placed inside the data folder for easy inspection
+    m_actionCsvPath = Path.Combine(m_dataDir, $"actions_frame_{m_runStamp}.csv");
+    m_observationCsvPath = Path.Combine(m_dataDir, $"observations_frame_{m_runStamp}.csv");
         // Create headers and write an initial marker line so we can detect write failures early
         try
         {
@@ -237,7 +244,8 @@ public class PushAgentBasic : Agent
             // will be created per chunk (every m_screenshotChunkSize frames).
             try
             {
-                m_screenshotRootDir = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "metadata", "recordings", m_runStamp);
+                // Screenshots live in the run root so chunk_* folders are siblings to the data_training folder
+                m_screenshotRootDir = m_runRoot;
                 Directory.CreateDirectory(m_screenshotRootDir);
                 // If no camera assigned in the inspector, default to Camera.main so screenshots are captured.
                 try
@@ -1239,6 +1247,23 @@ public class PushAgentBasic : Agent
                     else
                     {
                         UnityEngine.Debug.Log($"{perFrameLogPrefix} auto_video_completed script={scriptPath} exitCode={proc.ExitCode}");
+                        try
+                        {
+                            // The script writes recording.mp4 into the screenshotRoot (chunk folder).
+                            // Move it into the m_dataDir and rename to include the run stamp for clarity.
+                            var produced = System.IO.Path.Combine(screenshotRoot, "recording.mp4");
+                            if (System.IO.File.Exists(produced) && !string.IsNullOrEmpty(m_dataDir))
+                            {
+                                var destName = System.IO.Path.Combine(m_dataDir, $"{m_runStamp}_recording.mp4");
+                                // Overwrite if exists
+                                try { System.IO.File.Copy(produced, destName, true); UnityEngine.Debug.Log($"{perFrameLogPrefix} moved_recording dest={destName}"); }
+                                catch (System.Exception e) { UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} move_recording_failed {e.Message}"); }
+                            }
+                        }
+                        catch (System.Exception e)
+                        {
+                            UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} post_process_video_failed {e.Message}");
+                        }
                     }
                 }
             }
