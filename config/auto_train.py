@@ -22,6 +22,8 @@ UNITY_EXE = r"C:\soqqle\ml-agents\config\PushBlockHeadless\UnityEnvironment.exe"
 EXPORT_SCRIPT = Path(r"C:\soqqle\ml-agents\config\export_tensor.py")
 OUTPUT_DIR = Path(r"C:\soqqle\ml-agents\config\Training Outputs")
 RESULTS_DIR = Path(r"C:\soqqle\ml-agents\config\ppo\results")
+METRICS_DIR = Path(r"C:\soqqle\ml-agents\config\metrics\learning_improvement")
+LOG_DIR = Path(r"C:\soqqle\ml-agents\config\logs")
 
 
 def find_results_dir(run_id: str) -> Path | None:
@@ -92,9 +94,16 @@ def is_training_failed(line: str) -> bool:
 def run_training(yaml_config: str, run_id: str) -> int:
     """Run mlagents-learn and return the process exit code."""
     conda_exe = r"C:\tools\Anaconda3\condabin\conda.bat"
-    log_dir = Path(r"C:\soqqle\ml-agents\config\logs")
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / f"train_{run_id}.log"
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log_file = LOG_DIR / f"train_{run_id}.log"
+
+    # Ensure the log file starts fresh (never overwrite or append)
+    if log_file.exists():
+        # Rename old log to preserve history: train_1.log -> train_1.log.bak_1
+        counter = 1
+        while log_file.with_suffix(f".bak_{counter}").exists():
+            counter += 1
+        log_file.rename(log_file.with_suffix(f".bak_{counter}"))
 
     print(f"\n{'='*60}")
     print(f"[TRAIN] Starting training: run-id={run_id}")
@@ -103,19 +112,29 @@ def run_training(yaml_config: str, run_id: str) -> int:
     print(f"{'='*60}\n")
 
     # Write a batch file to handle conda activation properly
+    results_dir = RESULTS_DIR.as_posix()
+    METRICS_DIR.mkdir(parents=True, exist_ok=True)
     batch_content = (
         f'@echo off\n'
         f'set PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python\n'
+        f'set PUSHBLOCK_CSV_DIR={METRICS_DIR}\n'
         f'call "{conda_exe}" activate mlagents\n'
-        f'mlagents-learn "{yaml_config}" --run-id {run_id} --force --no-graphics --env "{UNITY_EXE}"\n'
+        f'mlagents-learn "{yaml_config}" --run-id {run_id} --force --env "{UNITY_EXE}" --results-dir "{results_dir}"\n'
     )
-    batch_file = log_dir / f"_run_{run_id}.bat"
+    batch_file = LOG_DIR / f"_run_{run_id}.bat"
     batch_file.write_text(batch_content)
+
+    # Build environment with PUSHBLOCK_CSV_DIR set for Unity
+    import os
+    env = os.environ.copy()
+    env['PUSHBLOCK_CSV_DIR'] = str(METRICS_DIR)
+    env['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
 
     # Run and redirect output to log file
     process = subprocess.Popen(
         f'cmd /c "{batch_file}" > "{log_file}" 2>&1',
         shell=True,
+        env=env,
     )
 
     last_line = ""
@@ -156,6 +175,41 @@ def run_training(yaml_config: str, run_id: str) -> int:
     if failed:
         return 1
     return process.returncode
+
+
+def _generate_learning_metrics(run_id: str):
+    """Find the latest learning_improvement CSV from Unity and compute detailed metrics."""
+    if not METRICS_DIR.exists():
+        print(f"[WARN] Metrics directory not found: {METRICS_DIR}")
+        return
+
+    # Find the most recent learning_improvement CSV
+    csv_files = sorted(METRICS_DIR.glob("learning_improvement_*.csv"),
+                       key=lambda f: f.stat().st_mtime, reverse=True)
+    if not csv_files:
+        print(f"[WARN] No learning_improvement CSV found for {run_id}")
+        return
+
+    input_csv = csv_files[0]
+    output_csv = METRICS_DIR / f"learning_metrics_{run_id}.csv"
+
+    # Run the metrics computation script
+    cmd = [
+        sys.executable,
+        str(Path(__file__).parent / "learning_metrics.py"),
+        str(input_csv),
+        str(output_csv),
+    ]
+    print(f"[METRICS] Computing learning-improvement metrics from {input_csv.name}")
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.stdout.strip():
+        print(result.stdout.strip())
+    if result.stderr.strip():
+        print(result.stderr.strip())
+    if result.returncode == 0:
+        print(f"[OK] Detailed metrics saved to {output_csv}")
+    else:
+        print(f"[WARN] Metrics computation failed for {run_id}")
 
 
 def main() -> int:
@@ -213,6 +267,9 @@ def main() -> int:
                 print(f"[WARN] No tfevents file found for {run_id}")
         else:
             print(f"[WARN] No results directory found for {run_id}")
+
+        # Generate learning-improvement metrics from Unity episode CSV
+        _generate_learning_metrics(run_id)
 
         run_number += 1
         run_count += 1
