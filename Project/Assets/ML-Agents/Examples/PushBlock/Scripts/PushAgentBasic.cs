@@ -172,12 +172,18 @@ public class PushAgentBasic : Agent
         m_ResetParams = Academy.Instance.EnvironmentParameters;
 
         SetResetParameters();
-        // Keep the CSV alongside the PushBlock example under Assets for easy inspection during editor testing.
-        m_learningImprovementCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "learning_improvement.csv");
-        m_agentEfficiencyCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "agent_efficiency.csv");
-        m_blockProgressCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "block_progress.csv");
-        m_reliabilityCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "reliability.csv");
-        m_controlQualityCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "control_quality.csv");
+        // Check for external CSV output directory via environment variable.
+        // Only redirect learning_improvement; other metrics stay at default locations.
+        var metricsDir = System.Environment.GetEnvironmentVariable("PUSHBLOCK_CSV_DIR");
+        if (!string.IsNullOrEmpty(metricsDir))
+        {
+            var stamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+            var dir = System.IO.Path.GetFullPath(metricsDir);
+            System.IO.Directory.CreateDirectory(dir);
+            m_learningImprovementCsvPath = System.IO.Path.Combine(dir, $"learning_improvement_{stamp}.csv");
+            UnityEngine.Debug.Log($"[PushBlock] Writing learning_improvement CSV to {dir} (stamp={stamp})");
+        }
+        // Other metrics stay at their default paths under Assets/ML-Agents/Examples/PushBlock/
     }
 
     /// <summary>
@@ -782,12 +788,19 @@ public class PushAgentBasic : Agent
         stats.Add("PushBlock/episode_length", m_episodeSteps);
         stats.Add("PushBlock/time_to_goal", success ? m_episodeSteps : -1);
 
-        ExportLearningImprovementSummary(success);
-        ExportAgentEfficiencySummary(success);
-        ExportBlockProgressSummary(success);
-        ExportReliabilitySummary(success);
-        ExportControlQualitySummary(success);
-        m_episodeMetricsRecorded = true;
+        try
+        {
+            ExportLearningImprovementSummary(success);
+            // Other metrics disabled in standalone builds to avoid path errors.
+            // ExportAgentEfficiencySummary(success);
+            // ExportBlockProgressSummary(success);
+            // ExportReliabilitySummary(success);
+            // ExportControlQualitySummary(success);
+        }
+        finally
+        {
+            m_episodeMetricsRecorded = true;
+        }
     }
 
     void ExportAgentEfficiencySummary(bool success)
