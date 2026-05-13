@@ -1,6 +1,9 @@
 using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace Unity.MLAgentsExamples
 {
@@ -42,6 +45,9 @@ namespace Unity.MLAgentsExamples
                     $"You didn't specify the {k_SceneVariableName} environment variable or the {k_SceneCommandLineFlag} command line argument."
                 );
                 Application.Quit(22);
+#if UNITY_EDITOR
+                EditorApplication.isPlaying = false;
+#endif
                 return;
             }
             if (SceneUtility.GetBuildIndexByScenePath(sceneName) < 0)
