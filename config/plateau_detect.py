@@ -18,7 +18,7 @@ import csv
 from pathlib import Path
 from statistics import mean, stdev
 
-TRAINING_OUTPUTS = Path(r"C:\soqqle\ml-agents\config\Training Outputs")
+RESULTS_DIR = Path(r"C:\soqqle\ml-agents\config\results")
 
 
 def load_csv(path: Path) -> list[dict]:
@@ -197,12 +197,14 @@ def detect_plateau(run_name: str, reward_csv: Path, length_csv: Path):
 
 
 def main():
-    runs = sorted([d for d in TRAINING_OUTPUTS.iterdir() if d.is_dir()])
+    runs = sorted([d for d in RESULTS_DIR.iterdir() if d.is_dir() and d.name.startswith("train_")])
+    run_names = []
     plateau_steps = []
 
     for run_dir in runs:
-        reward_csv = run_dir / "Cumulative Reward.csv"
-        length_csv = run_dir / "Episode Length.csv"
+        tensor_dir = run_dir / "training_outputs" / "tensor_export"
+        reward_csv = tensor_dir / "Cumulative Reward.csv"
+        length_csv = tensor_dir / "Episode Length.csv"
 
         if not reward_csv.exists() or not length_csv.exists():
             print(f"[SKIP] {run_dir.name}: missing CSV files")
@@ -210,6 +212,7 @@ def main():
 
         step = detect_plateau(run_dir.name, reward_csv, length_csv)
         if step is not None:
+            run_names.append(run_dir.name)
             plateau_steps.append(step)
 
     # Final summary
@@ -221,7 +224,7 @@ def main():
         print(f"\n{'═'*60}")
         print(f"PLATEAU DETECTION SUMMARY")
         print(f"{'═'*60}")
-        for name, step in zip([d.name for d in runs if d.name in [r.name for r in runs]], plateau_steps):
+        for name, step in zip(run_names, plateau_steps):
             print(f"  {name}: {step:,} steps")
         print(f"  {'─'*40}")
         print(f"  Typical plateau step:      {median_step:,}")

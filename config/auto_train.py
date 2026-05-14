@@ -1,15 +1,26 @@
 #!/usr/bin/env python3
 """
-Auto-run ml-agents training with automatic run-id increment and tensor export.
+Auto-run ml-agents training with organized output directories.
+
+Directory layout per training run:
+    results/run_XX/train_YY/
+        _ml_temp/          ← ML-Agents 原始输出，保留
+        metric/
+            learning improvement/
+        recordings/
+        tensor/            ← TensorBoard CSV exports
+        train_log/
+            train_YY.log
 
 Usage:
-    python auto_train.py --config config/ppo/3DBall.yaml --run-id 1 --runs 3
-    python auto_train.py --config config/ppo/3DBall.yaml --run-id 1  (runs until stopped)
+    python auto_train.py --config config/ppo/PushBlock.yaml --run-id 1 --runs 3
+    python auto_train.py --config config/ppo/PushBlock.yaml --run-id 1  (runs until stopped)
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shutil
 import subprocess
@@ -20,53 +31,88 @@ from pathlib import Path
 CONDA_EXE = r"C:\tools\Anaconda3\condabin\conda.bat"
 UNITY_EXE = r"C:\soqqle\ml-agents\config\PushBlockHeadless\UnityEnvironment.exe"
 EXPORT_SCRIPT = Path(r"C:\soqqle\ml-agents\config\export_tensor.py")
-OUTPUT_DIR = Path(r"C:\soqqle\ml-agents\config\Training Outputs")
-RESULTS_DIR = Path(r"C:\soqqle\ml-agents\config\ppo\results")
-METRICS_DIR = Path(r"C:\soqqle\ml-agents\config\metrics\learning_improvement")
-LOG_DIR = Path(r"C:\soqqle\ml-agents\config\logs")
+RESULTS_BASE = Path(r"C:\soqqle\ml-agents\config\results")
 
 
-def find_results_dir(run_id: str) -> Path | None:
-    """Find the results directory for a given run_id."""
-    if not RESULTS_DIR.exists():
-        return None
-    for child in RESULTS_DIR.iterdir():
-        if child.is_dir() and child.name == run_id:
-            return child
-    return None
+def setup_train_dirs(run_num: int, train_num: int):
+    """Create the full directory tree for a training run."""
+    run_dir = RESULTS_BASE / f"run_{run_num:02d}"
+    train_dir = run_dir / f"train_{train_num:02d}"
+    subdirs = [
+        train_dir / "_ml_temp",
+        train_dir / "metric" / "learning improvement",
+        train_dir / "recordings",
+        train_dir / "tensor",
+        train_dir / "train_log",
+    ]
+    for d in subdirs:
+        d.mkdir(parents=True, exist_ok=True)
+    return train_dir
 
 
-def find_tfevents_file(results_dir: Path) -> Path | None:
-    """Find the latest .tfevents file in the results directory."""
-    event_files = list(results_dir.glob("events.out.tfevents.*"))
-    if not event_files:
-        # Check subdirectories
-        for child in results_dir.iterdir():
-            if child.is_dir():
-                event_files.extend(child.glob("events.out.tfevents.*"))
+def find_tfevents_file(ml_temp: Path) -> Path | None:
+    """Find the latest .tfevents file inside _ml_temp/train_YY/."""
+    event_files = list(ml_temp.rglob("events.out.tfevents.*"))
     if not event_files:
         return None
     return max(event_files, key=lambda f: f.stat().st_mtime)
 
 
-def export_tensors(run_id: str, tfevents_file: Path) -> bool:
-    """Run export_tensor.py to extract CSVs into Training Outputs."""
-    out_dir = OUTPUT_DIR / run_id
+def export_tensors(tfevents_file: Path, tensor_dir: Path) -> bool:
+    """Run export_tensor.py to extract CSVs into tensor directory."""
     if not EXPORT_SCRIPT.exists():
         print(f"[ERROR] export_tensor.py not found at {EXPORT_SCRIPT}")
         return False
 
-    conda_exe = r"C:\tools\Anaconda3\condabin\conda.bat"
     cmd = (
-        f'"{conda_exe}" activate mlagents && '
-        f'python "{EXPORT_SCRIPT}" --event-file "{tfevents_file}" --out-dir "{out_dir}" --all'
+        f'"{CONDA_EXE}" activate mlagents && '
+        f'python "{EXPORT_SCRIPT}" --event-file "{tfevents_file}" --out-dir "{tensor_dir}" --all'
     )
-    print(f"[EXPORT] Running tensor export to {out_dir}")
+    print(f"[EXPORT] Running tensor export to {tensor_dir}")
     result = subprocess.run(cmd, capture_output=True, text=True, shell=True)
     print(result.stdout.strip())
-    if result.stderr:
+    if result.stderr.strip():
         print(result.stderr.strip())
     return result.returncode == 0
+
+
+def _copy_learning_improvement_csv(train_dir: Path):
+    """Copy Unity's learning_improvement CSV from _ml_temp to metric/learning improvement/."""
+    ml_temp = train_dir / "_ml_temp"
+    if not ml_temp.exists():
+        return
+    for f in ml_temp.rglob("learning_improvement_*.csv"):
+        dest = train_dir / "metric" / "learning improvement" / f.name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(str(f), str(dest))
+        print(f"[OK] Copied {f.name} to metric/learning improvement/")
+
+
+def _generate_learning_metrics(train_dir: Path, train_id: str):
+    """Find the latest learning_improvement CSV and compute detailed metrics."""
+    metric_dir = train_dir / "metric" / "learning improvement"
+    if not metric_dir.exists():
+        return
+
+    csv_files = sorted(metric_dir.glob("learning_improvement_*.csv"),
+                       key=lambda f: f.stat().st_mtime, reverse=True)
+    if not csv_files:
+        return
+
+    input_csv = csv_files[0]
+    output_csv = metric_dir / f"learning_metrics_{train_id}.csv"
+
+    metrics_script = Path(__file__).parent / "learning_metrics.py"
+    if not metrics_script.exists():
+        return
+
+    cmd = [sys.executable, str(metrics_script), str(input_csv), str(output_csv)]
+    print(f"[METRICS] Computing learning-improvement metrics from {input_csv.name}")
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.stdout.strip():
+        print(result.stdout.strip())
+    if result.returncode == 0:
+        print(f"[OK] Detailed metrics saved to {output_csv}")
 
 
 def is_training_complete(line: str) -> bool:
@@ -91,78 +137,73 @@ def is_training_failed(line: str) -> bool:
     return any(re.search(pattern, line) for pattern in failure_signals)
 
 
-def run_training(yaml_config: str, run_id: str) -> int:
+def run_training(yaml_config: str, run_num: int, train_num: int) -> int:
     """Run mlagents-learn and return the process exit code."""
-    conda_exe = r"C:\tools\Anaconda3\condabin\conda.bat"
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    log_file = LOG_DIR / f"train_{run_id}.log"
-
-    # Ensure the log file starts fresh (never overwrite or append)
-    if log_file.exists():
-        # Rename old log to preserve history: train_1.log -> train_1.log.bak_1
-        counter = 1
-        while log_file.with_suffix(f".bak_{counter}").exists():
-            counter += 1
-        log_file.rename(log_file.with_suffix(f".bak_{counter}"))
+    train_id = f"train_{train_num:02d}"
+    train_dir = setup_train_dirs(run_num, train_num)
+    ml_temp = train_dir / "_ml_temp"
+    log_file = train_dir / "train_log" / f"{train_id}.log"
+    metric_li_dir = train_dir / "metric" / "learning improvement"
 
     print(f"\n{'='*60}")
-    print(f"[TRAIN] Starting training: run-id={run_id}")
+    print(f"[TRAIN] Starting training: run=run_{run_num:02d}, id={train_id}")
     print(f"[TRAIN] Config: {yaml_config}")
-    print(f"[TRAIN] Log: {log_file}")
+    print(f"[TRAIN] Output: {train_dir}")
     print(f"{'='*60}\n")
 
-    # Write a batch file to handle conda activation properly
-    results_dir = RESULTS_DIR.as_posix()
-    METRICS_DIR.mkdir(parents=True, exist_ok=True)
+    results_dir_posix = ml_temp.as_posix()
+    metric_li_posix = metric_li_dir.as_posix()
+    recordings_posix = (train_dir / "recordings").as_posix()
+
     batch_content = (
         f'@echo off\n'
+        f'set PYTHONUNBUFFERED=1\n'
         f'set PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python\n'
-        f'set PUSHBLOCK_CSV_DIR={METRICS_DIR}\n'
-        f'call "{conda_exe}" activate mlagents\n'
-        f'mlagents-learn "{yaml_config}" --run-id {run_id} --force --env "{UNITY_EXE}" --results-dir "{results_dir}"\n'
+        f'set PUSHBLOCK_CSV_DIR={metric_li_posix}\n'
+        f'set PUSHBLOCK_METADATA_DIR={recordings_posix}\n'
+        f'set PUSHBLOCK_RUN_ID={train_id}\n'
+        f'call "{CONDA_EXE}" activate mlagents\n'
+        f'mlagents-learn "{yaml_config}" --run-id {train_id} --force --env "{UNITY_EXE}" --results-dir "{results_dir_posix}"\n'
     )
-    batch_file = LOG_DIR / f"_run_{run_id}.bat"
+    batch_file = train_dir / "_run.bat"
     batch_file.write_text(batch_content)
 
-    # Build environment with PUSHBLOCK_CSV_DIR set for Unity
-    import os
     env = os.environ.copy()
-    env['PUSHBLOCK_CSV_DIR'] = str(METRICS_DIR)
+    env['PYTHONUNBUFFERED'] = '1'
+    env['PUSHBLOCK_CSV_DIR'] = str(metric_li_dir)
+    env['PUSHBLOCK_METADATA_DIR'] = str(train_dir / "recordings")
+    env['PUSHBLOCK_RUN_ID'] = train_id
     env['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
 
-    # Run and redirect output to log file
     process = subprocess.Popen(
         f'cmd /c "{batch_file}" > "{log_file}" 2>&1',
         shell=True,
         env=env,
     )
 
-    last_line = ""
     failed = False
     last_step_seen = -1
     try:
-        # Tail the log file while process runs
         while process.poll() is None:
-            import time as _time
-            _time.sleep(2)
+            time.sleep(2)
             try:
                 with open(log_file, "r", encoding="utf-8", errors="replace") as f:
                     for line in f:
                         line = line.rstrip()
-                        if line:
-                            # Deduplicate step lines by step number
-                            step_match = re.search(r"Step:\s*(\d+)", line)
-                            if step_match:
-                                step = int(step_match.group(1))
-                                if step <= last_step_seen:
-                                    continue
-                                last_step_seen = step
-                            print(line)
-                            if is_training_complete(line):
-                                print("\n[TRAIN] Training completion detected")
-                            if is_training_failed(line):
-                                print("\n[TRAIN] Training failure detected")
-                                failed = True
+                        if not line:
+                            continue
+                        step_match = re.search(r"Step:\s*(\d+)", line)
+                        if step_match:
+                            step = int(step_match.group(1))
+                            if step <= last_step_seen:
+                                continue
+                            last_step_seen = step
+                        print(line)
+                        if is_training_complete(line):
+                            print("\n[TRAIN] Training completion detected")
+                        if is_training_failed(line):
+                            print("\n[TRAIN] Training failure detected")
+                            failed = True
             except FileNotFoundError:
                 pass
     except KeyboardInterrupt:
@@ -177,106 +218,100 @@ def run_training(yaml_config: str, run_id: str) -> int:
     return process.returncode
 
 
-def _generate_learning_metrics(run_id: str):
-    """Find the latest learning_improvement CSV from Unity and compute detailed metrics."""
-    if not METRICS_DIR.exists():
-        print(f"[WARN] Metrics directory not found: {METRICS_DIR}")
-        return
+def post_training(run_num: int, train_num: int) -> bool:
+    """Export tensors from _ml_temp, copy CSVs, compute metrics."""
+    train_id = f"train_{train_num:02d}"
+    train_dir = RESULTS_BASE / f"run_{run_num:02d}" / train_id
+    ml_temp = train_dir / "_ml_temp"
+    tensor_dir = train_dir / "tensor"
 
-    # Find the most recent learning_improvement CSV
-    csv_files = sorted(METRICS_DIR.glob("learning_improvement_*.csv"),
-                       key=lambda f: f.stat().st_mtime, reverse=True)
-    if not csv_files:
-        print(f"[WARN] No learning_improvement CSV found for {run_id}")
-        return
-
-    input_csv = csv_files[0]
-    output_csv = METRICS_DIR / f"learning_metrics_{run_id}.csv"
-
-    # Run the metrics computation script
-    cmd = [
-        sys.executable,
-        str(Path(__file__).parent / "learning_metrics.py"),
-        str(input_csv),
-        str(output_csv),
-    ]
-    print(f"[METRICS] Computing learning-improvement metrics from {input_csv.name}")
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.stdout.strip():
-        print(result.stdout.strip())
-    if result.stderr.strip():
-        print(result.stderr.strip())
-    if result.returncode == 0:
-        print(f"[OK] Detailed metrics saved to {output_csv}")
+    # Export tensors directly from _ml_temp
+    tfevents = find_tfevents_file(ml_temp)
+    if tfevents:
+        success = export_tensors(tfevents, tensor_dir)
+        if not success:
+            print(f"[WARN] Tensor export failed for {train_id}")
     else:
-        print(f"[WARN] Metrics computation failed for {run_id}")
+        print(f"[WARN] No tfevents file found for {train_id}")
+
+    # Copy learning_improvement CSV
+    _copy_learning_improvement_csv(train_dir)
+
+    # Generate learning metrics
+    _generate_learning_metrics(train_dir, train_id)
+
+    return True
+
+
+def find_next_run_number() -> int:
+    """Scan results/ for existing run_XX dirs and return the next available number."""
+    if not RESULTS_BASE.exists():
+        return 1
+    existing = []
+    for entry in RESULTS_BASE.iterdir():
+        if entry.is_dir() and entry.name.startswith("run_"):
+            m = re.match(r"run_(\d+)$", entry.name)
+            if m:
+                existing.append(int(m.group(1)))
+    return max(existing) + 1 if existing else 1
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Auto-run ml-agents training with incrementing run-ids"
+        description="Auto-run ml-agents training with organized output directories"
     )
     parser.add_argument(
         "--config", required=True, help="Path to YAML config file"
     )
     parser.add_argument(
-        "--run-id", type=int, required=True, help="Starting run-id number"
+        "--run-id", type=int, default=0,
+        help="Starting run number (run_XX). 0 = auto-find next available"
     )
     parser.add_argument(
         "--runs",
         type=int,
         default=0,
-        help="Number of runs to execute (0 = infinite until stopped)",
+        help="Number of training runs to execute (0 = infinite until stopped)",
     )
     args = parser.parse_args()
 
     yaml_config = args.config
-    run_number = args.run_id
+    run_num = args.run_id if args.run_id > 0 else find_next_run_number()
+    train_num = 1  # Always start from train_01 within each run
     run_count = 0
     max_runs = args.runs
+
+    print(f"[AUTO-RUN] Using run_{run_num:02d}")
 
     while True:
         if max_runs > 0 and run_count >= max_runs:
             print(f"[DONE] Completed {max_runs} runs")
             break
 
-        run_id = f"train_{run_number}"
-
         # Run training
-        exit_code = run_training(yaml_config, run_id)
+        exit_code = run_training(yaml_config, run_num, train_num)
 
         if exit_code == -1:
             print("[STOP] Training was interrupted, stopping auto-run")
             break
 
         if exit_code != 0:
-            print(f"[STOP] Training failed for {run_id}, stopping auto-run")
+            train_id = f"train_{train_num:02d}"
+            print(f"[STOP] Training failed for {train_id}, stopping auto-run")
             break
 
-        # Find and export tensors
-        results_dir = find_results_dir(run_id)
-        if results_dir:
-            tfevents = find_tfevents_file(results_dir)
-            if tfevents:
-                success = export_tensors(run_id, tfevents)
-                if success:
-                    print(f"[OK] Tensors exported for {run_id}")
-                else:
-                    print(f"[WARN] Tensor export failed for {run_id}")
-            else:
-                print(f"[WARN] No tfevents file found for {run_id}")
-        else:
-            print(f"[WARN] No results directory found for {run_id}")
+        # Post-training: export tensors and organize outputs
+        success = post_training(run_num, train_num)
+        if not success:
+            train_id = f"train_{train_num:02d}"
+            print(f"[WARN] Post-training organization failed for {train_id}")
 
-        # Generate learning-improvement metrics from Unity episode CSV
-        _generate_learning_metrics(run_id)
-
-        run_number += 1
+        train_num += 1
         run_count += 1
 
         # Brief pause before next run
         if max_runs == 0 or run_count < max_runs:
-            print(f"\n[NEXT] Preparing run {run_number} in 10 seconds...")
+            print(f"\n[NEXT] Preparing train_{train_num:02d} in 10 seconds...")
             print("[NEXT] Make sure Unity is ready before the next run starts")
             time.sleep(10)
 

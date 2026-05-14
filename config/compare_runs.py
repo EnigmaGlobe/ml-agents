@@ -16,9 +16,7 @@ import csv
 from pathlib import Path
 from statistics import mean, stdev
 
-TRAINING_OUTPUTS = Path(r"C:\soqqle\ml-agents\config\Training Outputs")
-LOGS_DIR = Path(r"C:\soqqle\ml-agents\config\logs")
-RESULTS_DIR = Path(r"C:\soqqle\ml-agents\config\ppo\results")
+RESULTS_DIR = Path(r"C:\soqqle\ml-agents\config\results")
 
 
 def load_csv(path: Path) -> list[dict]:
@@ -38,7 +36,7 @@ def load_csv(path: Path) -> list[dict]:
 
 
 def compare_runs():
-    runs = sorted([d.name for d in TRAINING_OUTPUTS.iterdir() if d.is_dir()])
+    runs = sorted([d.name for d in RESULTS_DIR.iterdir() if d.is_dir() and d.name.startswith("train_")])
     print(f"\n{'═'*70}")
     print(f"TRAIN RUN DIAGNOSTIC COMPARISON")
     print(f"Runs: {', '.join(runs)}")
@@ -47,7 +45,7 @@ def compare_runs():
     # ── 1. Check logs for seed info ──
     print(f"\n── Check 1: Seed Information ──")
     for run in runs:
-        log_file = LOGS_DIR / f"train_{run}.log"
+        log_file = RESULTS_DIR / run / "train_log" / f"{run}.log"
         if log_file.exists():
             content = log_file.read_text(encoding="utf-8", errors="replace")
             seed_line = [l for l in content.split("\n") if "seed" in l.lower()]
@@ -59,7 +57,7 @@ def compare_runs():
     # ── 2. Config consistency ──
     print(f"\n── Check 2: Hyperparameter Consistency ──")
     for run in runs:
-        log_file = LOGS_DIR / f"train_{run}.log"
+        log_file = RESULTS_DIR / run / "train_log" / f"{run}.log"
         if log_file.exists():
             content = log_file.read_text(encoding="utf-8", errors="replace")
             # Check for resume/initialize_from
@@ -75,11 +73,12 @@ def compare_runs():
 
     metrics = {}
     for run in runs:
-        rw = load_csv(TRAINING_OUTPUTS / run / "Cumulative Reward.csv")
-        pl = load_csv(TRAINING_OUTPUTS / run / "Policy Loss.csv")
-        vl = load_csv(TRAINING_OUTPUTS / run / "Value Loss.csv")
-        el = load_csv(TRAINING_OUTPUTS / run / "Episode Length.csv")
-        ex = load_csv(TRAINING_OUTPUTS / run / "Extrinsic Reward.csv")
+        tensor_dir = RESULTS_DIR / run / "training_outputs" / "tensor_export"
+        rw = load_csv(tensor_dir / "Cumulative Reward.csv")
+        pl = load_csv(tensor_dir / "Policy Loss.csv")
+        vl = load_csv(tensor_dir / "Value Loss.csv")
+        el = load_csv(tensor_dir / "Episode Length.csv")
+        ex = load_csv(tensor_dir / "Extrinsic Reward.csv")
 
         final_rw = rw[-1]["value"] if rw else 0
         final_pl = pl[-1]["value"] if pl else 0
@@ -102,8 +101,9 @@ def compare_runs():
     print(f"\n── Check 4: Early Exploration Divergence ──")
     steps_check = [20000, 100000, 200000, 400000, 600000]
     for run in runs:
-        rw = load_csv(TRAINING_OUTPUTS / run / "Cumulative Reward.csv")
-        el = load_csv(TRAINING_OUTPUTS / run / "Episode Length.csv")
+        tensor_dir = RESULTS_DIR / run / "training_outputs" / "tensor_export"
+        rw = load_csv(tensor_dir / "Cumulative Reward.csv")
+        el = load_csv(tensor_dir / "Episode Length.csv")
         rw_map = {r["step"]: r["value"] for r in rw}
         el_map = {e["step"]: e["value"] for e in el}
 
@@ -122,7 +122,8 @@ def compare_runs():
     print(f"  {'─'*64}")
 
     for run in runs:
-        vl = load_csv(TRAINING_OUTPUTS / run / "Value Loss.csv")
+        tensor_dir = RESULTS_DIR / run / "training_outputs" / "tensor_export"
+        vl = load_csv(tensor_dir / "Value Loss.csv")
         vl_map = {v["step"]: v["value"] for v in vl}
 
         def get_val(step):
