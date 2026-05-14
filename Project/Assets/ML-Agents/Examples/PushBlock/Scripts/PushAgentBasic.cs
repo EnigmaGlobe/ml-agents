@@ -231,77 +231,83 @@ public class PushAgentBasic : Agent
         m_reliabilityCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "reliability.csv");
         m_controlQualityCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "control_quality.csv");
 
-        // --- Per-run directory structure ---
-        m_runStamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
-        m_runRoot = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "metadata", m_runStamp);
+        // --- Per-run directory structure: env var override for headless training ---
+        var metadataDir = System.Environment.GetEnvironmentVariable("PUSHBLOCK_METADATA_DIR");
+        var runIdEnv = System.Environment.GetEnvironmentVariable("PUSHBLOCK_RUN_ID");
+        if (!string.IsNullOrEmpty(metadataDir) && !string.IsNullOrEmpty(runIdEnv))
+        {
+            m_runStamp = runIdEnv;
+            m_runRoot = System.IO.Path.GetFullPath(metadataDir);
+            System.IO.Directory.CreateDirectory(m_runRoot);
+            UnityEngine.Debug.Log($"[PushBlock] Using metadata dir from env: {m_runRoot} (runId={m_runStamp})");
+        }
+        else
+        {
+            m_runStamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
+            m_runRoot = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "metadata", m_runStamp);
+        }
+
         m_dataDir = Path.Combine(m_runRoot, "data_training");
         Directory.CreateDirectory(m_dataDir);
         m_actionCsvPath = Path.Combine(m_dataDir, $"actions_frame_{m_runStamp}.csv");
         m_observationCsvPath = Path.Combine(m_dataDir, $"observations_frame_{m_runStamp}.csv");
 
         // --- Initialize action/observation CSVs with headers + marker rows ---
+        var actionHeaderInit = "run_id,timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,action_x,action_y";
+        var obsHeaderInit = "run_id,timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,is_decision,reward,agent_pos_x,agent_pos_y,agent_pos_z,agent_rot_x,agent_rot_y,agent_rot_z,block_pos_x,block_pos_y,block_pos_z,block_vel_x,block_vel_y,block_vel_z,goal_pos_x,goal_pos_y,goal_pos_z";
+        m_actionCsvPath = EnsureCsvFileReady(m_actionCsvPath, actionHeaderInit, perFrameLogPrefix);
+        m_observationCsvPath = EnsureCsvFileReady(m_observationCsvPath, obsHeaderInit, perFrameLogPrefix);
+
+        var markerTimestamp = System.DateTime.Now.ToString("o", CultureInfo.InvariantCulture);
+        var actionMarker = string.Format(CultureInfo.InvariantCulture, "{0},{1},0,0,init,0,0,0,0,0", markerTimestamp, m_runStamp);
+        var obsMarker = string.Format(CultureInfo.InvariantCulture, "{0},{1},0,0,init,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0", markerTimestamp, m_runStamp);
+        File.AppendAllText(m_actionCsvPath, actionMarker + System.Environment.NewLine);
+        File.AppendAllText(m_observationCsvPath, obsMarker + System.Environment.NewLine);
+
+        // --- Screenshot directory + camera auto-assign ---
         try
         {
-            var actionHeaderInit = "timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,action_x,action_y";
-            var obsHeaderInit = "timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,is_decision,reward,agent_pos_x,agent_pos_y,agent_pos_z,agent_rot_x,agent_rot_y,agent_rot_z,block_pos_x,block_pos_y,block_pos_z,block_vel_x,block_vel_y,block_vel_z,goal_pos_x,goal_pos_y,goal_pos_z";
-            m_actionCsvPath = EnsureCsvFileReady(m_actionCsvPath, actionHeaderInit, perFrameLogPrefix);
-            m_observationCsvPath = EnsureCsvFileReady(m_observationCsvPath, obsHeaderInit, perFrameLogPrefix);
+            m_screenshotRootDir = Path.Combine(m_runRoot, "screenshots");
+            Directory.CreateDirectory(m_screenshotRootDir);
 
-            var stamp = System.DateTime.Now.ToString("o", CultureInfo.InvariantCulture);
-            var actionMarker = string.Format(CultureInfo.InvariantCulture, "{0},0,0,init,0,0,0,0,0", stamp);
-            var obsMarker = string.Format(CultureInfo.InvariantCulture, "{0},0,0,init,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0", stamp);
-            File.AppendAllText(m_actionCsvPath, actionMarker + System.Environment.NewLine);
-            File.AppendAllText(m_observationCsvPath, obsMarker + System.Environment.NewLine);
-
-            // --- Screenshot directory + camera auto-assign ---
             try
             {
-                m_screenshotRootDir = m_runRoot;
-                Directory.CreateDirectory(m_screenshotRootDir);
-
-                try
+                if (screenshotCamera == null)
                 {
-                    if (screenshotCamera == null)
+                    try
                     {
-                        try
+                        var tagged = GameObject.FindWithTag("recorder cam");
+                        if (tagged != null)
                         {
-                            var tagged = GameObject.FindWithTag("recorder cam");
-                            if (tagged != null)
+                            var cam = tagged.GetComponent<Camera>();
+                            if (cam != null)
                             {
-                                var cam = tagged.GetComponent<Camera>();
-                                if (cam != null)
-                                {
-                                    screenshotCamera = cam;
-                                    UnityEngine.Debug.Log($"{perFrameLogPrefix} screenshotCamera found by tag 'recorder cam' -> '{screenshotCamera.name}' for run {m_runStamp}");
-                                }
+                                screenshotCamera = cam;
+                                UnityEngine.Debug.Log($"{perFrameLogPrefix} screenshotCamera found by tag 'recorder cam' -> '{screenshotCamera.name}' for run {m_runStamp}");
                             }
                         }
-                        catch { }
-
-                        if (screenshotCamera == null)
-                        {
-                            screenshotCamera = Camera.main;
-                        }
                     }
+                    catch { }
 
                     if (screenshotCamera == null)
                     {
-                        enableScreenshotCapture = false;
-                        UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} screenshot capture disabled: no screenshotCamera assigned, no 'recorder cam' found, and Camera.main is null.");
-                    }
-                    else
-                    {
-                        UnityEngine.Debug.Log($"{perFrameLogPrefix} screenshotCamera set to '{screenshotCamera.name}' for run {m_runStamp}");
+                        screenshotCamera = Camera.main;
                     }
                 }
-                catch { }
+
+                if (screenshotCamera == null)
+                {
+                    enableScreenshotCapture = false;
+                    UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} screenshot capture disabled: no screenshotCamera assigned, no 'recorder cam' found, and Camera.main is null.");
+                }
+                else
+                {
+                    UnityEngine.Debug.Log($"{perFrameLogPrefix} screenshotCamera set to '{screenshotCamera.name}' for run {m_runStamp}");
+                }
             }
             catch { }
         }
-        catch (System.Exception e)
-        {
-            UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} init_write_failed {e.Message}");
-        }
+        catch { }
     }
 
     /// <summary>
@@ -595,11 +601,11 @@ public class PushAgentBasic : Agent
     void WritePerFrameLogs()
     {
         //UnityEngine.Debug.Log($"{perFrameLogPrefix} WritePerFrameLogs called, enableScreenshotCapture={enableScreenshotCapture}, screenshotCamera={screenshotCamera?.name}");
-        
-    // Build CSV paths and headers (action has two continuous dims) — include frame_count and realtime_since_start
-    var actionHeader = "timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,action_x,action_y";
+
+    // Build CSV paths and headers (action has two continuous dims) — include run_id, frame_count and realtime_since_start
+    var actionHeader = "run_id,timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,action_x,action_y";
     // Add 'is_decision' and 'reward' columns to observations (reward is non-zero only on decision frames)
-    var obsHeader = "timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,is_decision,reward,agent_pos_x,agent_pos_y,agent_pos_z,agent_rot_x,agent_rot_y,agent_rot_z,block_pos_x,block_pos_y,block_pos_z,block_vel_x,block_vel_y,block_vel_z,goal_pos_x,goal_pos_y,goal_pos_z";
+    var obsHeader = "run_id,timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,is_decision,reward,agent_pos_x,agent_pos_y,agent_pos_z,agent_rot_x,agent_rot_y,agent_rot_z,block_pos_x,block_pos_y,block_pos_z,block_vel_x,block_vel_y,block_vel_z,goal_pos_x,goal_pos_y,goal_pos_z";
 
         m_actionCsvPath = EnsureCsvFileReady(m_actionCsvPath, actionHeader, perFrameLogPrefix);
         m_observationCsvPath = EnsureCsvFileReady(m_observationCsvPath, obsHeader, perFrameLogPrefix);
@@ -614,7 +620,7 @@ public class PushAgentBasic : Agent
         float actionX = m_lastActionX;
         float actionY = m_lastActionY;
 
-        var actionRow = string.Format(CultureInfo.InvariantCulture, "{0},{1},{2},{3},{4},{5},{6},{7:F6},{8:F6}", timestamp, frameCount, realtime, agentId, m_episodeId, trainingStep, stepIndex, actionX, actionY);
+        var actionRow = string.Format(CultureInfo.InvariantCulture, "{0},{1},{2},{3},{4},{5},{6},{7},{8:F6},{9:F6}", m_runStamp, timestamp, frameCount, realtime, agentId, m_episodeId, trainingStep, stepIndex, actionX, actionY);
 
         var agentPos = transform.position;
         var agentRot = transform.eulerAngles;
@@ -634,7 +640,8 @@ public class PushAgentBasic : Agent
 
         var obsRow = string.Format(
             CultureInfo.InvariantCulture,
-            "{0},{1},{2},{3},{4},{5},{6},{7},{8:F6},{9:F4},{10:F4},{11:F4},{12:F4},{13:F4},{14:F4},{15:F4},{16:F4},{17:F4},{18:F4},{19:F4},{20:F4},{21:F4},{22:F4}",
+            "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9:F6},{10:F4},{11:F4},{12:F4},{13:F4},{14:F4},{15:F4},{16:F4},{17:F4},{18:F4},{19:F4},{20:F4},{21:F4},{22:F4},{23:F4}",
+            m_runStamp,
             timestamp,
             frameCount,
             realtime,
@@ -1175,7 +1182,8 @@ public class PushAgentBasic : Agent
 
             var obsRow = string.Format(
                 CultureInfo.InvariantCulture,
-                "{0},{1},{2},{3},{4},{5},{6},{7},{8:F6},{9:F4},{10:F4},{11:F4},{12:F4},{13:F4},{14:F4},{15:F4},{16:F4},{17:F4},{18:F4},{19:F4},{20:F4},{21:F4},{22:F4},{23:F4}",
+                "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9:F6},{10:F4},{11:F4},{12:F4},{13:F4},{14:F4},{15:F4},{16:F4},{17:F4},{18:F4},{19:F4},{20:F4},{21:F4},{22:F4},{23:F4},{24:F4}",
+                m_runStamp,
                 timestamp,
                 frameCount,
                 realtime,
@@ -1202,7 +1210,7 @@ public class PushAgentBasic : Agent
                 goalPos.z
             );
 
-            m_observationCsvPath = EnsureCsvFileReady(m_observationCsvPath, "timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,is_decision,reward,agent_pos_x,agent_pos_y,agent_pos_z,agent_rot_x,agent_rot_y,agent_rot_z,block_pos_x,block_pos_y,block_pos_z,block_vel_x,block_vel_y,block_vel_z,goal_pos_x,goal_pos_y,goal_pos_z", perFrameLogPrefix);
+            m_observationCsvPath = EnsureCsvFileReady(m_observationCsvPath, "run_id,timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,is_decision,reward,agent_pos_x,agent_pos_y,agent_pos_z,agent_rot_x,agent_rot_y,agent_rot_z,block_pos_x,block_pos_y,block_pos_z,block_vel_x,block_vel_y,block_vel_z,goal_pos_x,goal_pos_y,goal_pos_z", perFrameLogPrefix);
             File.AppendAllText(m_observationCsvPath, obsRow + System.Environment.NewLine);
             //UnityEngine.Debug.Log($"{perFrameLogPrefix} append_immediate_obs is_decision={isDecision} reward={reward:F6} path={m_observationCsvPath}");
         }
