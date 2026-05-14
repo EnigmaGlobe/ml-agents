@@ -75,3 +75,13 @@ This is your cleanest baseline family. Your JEPA reward-only model can be framed
 
 Frontier status:
 Not frontier by itself. It is now a standard baseline. The novelty comes from replacing the ICM feature/prediction structure with JEPA-style latent prediction and testing whether that changes exploration quality.
+
+1. Curiosity / ICM family
+
+Pathak, D., Agrawal, P., Efros, A. A., & Darrell, T. (2017). Curiosity-driven exploration by self-supervised prediction. In D. Precup & Y. W. Teh (Eds.), Proceedings of the 34th International Conference on Machine Learning (Vol. 70, pp. 2778–2787). PMLR. https://proceedings.mlr.press/v70/pathak17a.html
+
+Burda, Y., Edwards, H., Pathak, D., Storkey, A., Darrell, T., & Efros, A. A. (2019). Large-scale study of curiosity-driven learning. International Conference on Learning Representations. https://openreview.net/forum?id=rJNwDjAqYX
+
+Kayal, A., Pignatelli, E., & Toni, L. (2025). The impact of intrinsic rewards on exploration in reinforcement learning. Neural Computing and Applications, 37, 16269–16303. https://doi.org/10.1007/s00521-025-11340-0
+
+Unity Technologies. (n.d.). ML-Agents theory. Unity Documentation. Retrieved May 14, 2026, from https://docs.unity3d.com/Packages/com.unity.ml-agents@4.0/manual/ML-Agents-Overview.html

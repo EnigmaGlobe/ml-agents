@@ -91,3 +91,11 @@ RND tests state novelty. Your JEPA reward-only tests something closer to predict
 
 Frontier status:
 RND is not frontier, but it is a necessary credibility baseline. Including RND makes your comparison stronger because you can say JEPA is not merely beating “old curiosity,” but is being compared against both major learned intrinsic-reward families: controllable prediction error and state novelty.
+
+2. RND family
+
+Burda, Y., Edwards, H., Storkey, A., & Klimov, O. (2019). Exploration by random network distillation. International Conference on Learning Representations. https://openreview.net/forum?id=H1lJJnR5Ym
+
+Unity Technologies. (n.d.). ML-Agents theory. Unity Documentation. Retrieved May 14, 2026, from https://docs.unity3d.com/Packages/com.unity.ml-agents@4.0/manual/ML-Agents-Overview.html
+
+Yuan, M., Creus Castanyer, R., Li, B., Jin, X., Zeng, W., & Berseth, G. (2025). RLeXplore: Accelerating research in intrinsically-motivated reinforcement learning. Transactions on Machine Learning Research. https://mlanthology.org/tmlr/2025/yuan2025tmlr-rlexplore/

@@ -78,3 +78,13 @@ Better self-supervised visual representations can improve downstream RL performa
 
 Frontier status:
 Moderately frontier. Contrastive visual RL is active, but not as novel as JEPA-style latent prediction. Your advantage is that JEPA is non-contrastive / predictive in embedding space, so you can present it as an alternative to contrastive auxiliary learning.
+
+4. Contrastive predictive / temporal self-supervised family
+
+van den Oord, A., Li, Y., & Vinyals, O. (2018). Representation learning with contrastive predictive coding. arXiv. https://doi.org/10.48550/arXiv.1807.03748
+
+Laskin, M., Srinivas, A., & Abbeel, P. (2020). CURL: Contrastive unsupervised representations for reinforcement learning. In Proceedings of the 37th International Conference on Machine Learning (Vol. 119, pp. 5639–5650). PMLR. https://proceedings.mlr.press/v119/laskin20a.html
+
+Zheng, R., Wang, X., Sun, Y., Ma, S., Zhao, J., Xu, H., Daumé III, H., & Huang, F. (2023). TACO: Temporal latent action-driven contrastive loss for visual reinforcement learning. In Advances in Neural Information Processing Systems, 36. https://papers.nips.cc/paper_files/paper/2023/hash/96d00450ed65531ffe2996daed487536-Abstract-Conference.html
+
+Sun, J., Akcal, M. U., Chowdhary, G., & Zhang, W. (2025). MOOSS: Mask-enhanced temporal contrastive learning for smooth state evolution in visual reinforcement learning. In Proceedings of the Winter Conference on Applications of Computer Vision (pp. 6719–6729). https://doi.org/10.1109/WACV61041.2025.00654

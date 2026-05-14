@@ -80,3 +80,15 @@ JEPA has strong evidence in visual/video representation learning and emerging ev
 
 Frontier status:
 Yes — this is the most frontier part. The important caution is wording. Say “JEPA-inspired predictive representation for RL”, not “JEPA is already a standard intrinsic-reward baseline.”
+
+5. JEPA-style predictor family
+
+Assran, M., Duval, Q., Misra, I., Bojanowski, P., Vincent, P., Rabbat, M., LeCun, Y., & Ballas, N. (2023). Self-supervised learning from images with a joint-embedding predictive architecture. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (pp. 15619–15629). https://openaccess.thecvf.com/content/CVPR2023/html/Assran_Self-Supervised_Learning_From_Images_With_a_Joint-Embedding_Predictive_Architecture_CVPR_2023_paper.html
+
+Bardes, A., Garrido, Q., Ponce, J., Chen, X., Rabbat, M., LeCun, Y., Assran, M., & Ballas, N. (2024). Revisiting feature prediction for learning visual representations from video. Transactions on Machine Learning Research. https://openreview.net/forum?id=QaCCuDfBk2
+
+Assran, M., Bardes, A., Fan, D., Garrido, Q., Howes, R., Komeili, M., Muckley, M., Rizvi, A., Roberts, C., Sinha, K., Zholus, A., Arnaud, S., Gejji, A., Martin, A., Hogan, F. R., Dugas, D., Bojanowski, P., Khalidov, V., Labatut, P., ... Ballas, N. (2025). V-JEPA 2: Self-supervised video models enable understanding, prediction and planning. arXiv. https://doi.org/10.48550/arXiv.2506.09985
+
+Kenneweg, T., Kenneweg, P., & Hammer, B. (2025). JEPA for RL: Investigating joint-embedding predictive architectures for reinforcement learning. arXiv. https://doi.org/10.48550/arXiv.2504.16591
+
+Bagatella, M., Pirotta, M., Touati, A., Lazaric, A., & Tirinzoni, A. (2025). TD-JEPA: Latent-predictive representations for zero-shot reinforcement learning. arXiv. https://doi.org/10.48550/arXiv.2510.00739

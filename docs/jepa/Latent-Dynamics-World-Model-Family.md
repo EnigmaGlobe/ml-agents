@@ -78,3 +78,13 @@ That is a different and more current question than simply adding an intrinsic re
 
 Frontier status:
 Yes, especially if you emphasize latent predictive representation for online visual control. But you should avoid claiming you are competing with full world-model planners like DreamerV3 or TD-MPC2 unless you actually implement planning/imagination. Your work is better framed as model-free PPO enhanced by JEPA-style latent prediction.
+
+3. Latent dynamics / world-model family
+
+Hafner, D., Pasukonis, J., Ba, J., & Lillicrap, T. (2025). Mastering diverse control tasks through world models. Nature, 640, 647–653. https://doi.org/10.1038/s41586-025-08744-2
+
+Hansen, N., Su, H., & Wang, X. (2024). TD-MPC2: Scalable, robust world models for continuous control. International Conference on Learning Representations. https://openreview.net/forum?id=Oxh5CstDJU
+
+Tang, Y., Guo, Z. D., Richemond, P. H., Avila Pires, B., Chandak, Y., Munos, R., Rowland, M., Gheshlaghi Azar, M., Le Lan, C., Lyle, C., György, A., Thakoor, S., Dabney, W., Piot, B., Calandriello, D., & Valko, M. (2023). Understanding self-predictive learning for reinforcement learning. In Proceedings of the 40th International Conference on Machine Learning (Vol. 202, pp. 33632–33656). PMLR. https://proceedings.mlr.press/v202/tang23d.html
+
+Khetarpal, K., Guo, Z. D., Pires, B. A., Tang, Y., Lyle, C., Rowland, M., Heess, N., Borsa, D. L., Guez, A., & Dabney, W. (2025). A unifying framework for action-conditional self-predictive reinforcement learning. In Proceedings of the 28th International Conference on Artificial Intelligence and Statistics (Vol. 258, pp. 181–189). PMLR. https://proceedings.mlr.press/v258/khetarpal25a.html
