@@ -246,7 +246,14 @@ class TensorboardWriter(StatsWriter):
                 self.summary_writers[category].add_histogram(
                     f"{key}_hist", np.array(value.full_dist), step
                 )
-            self.summary_writers[category].flush()
+            try:
+                # Flush can raise if the background writer thread has failed.
+                # Guard against that to avoid crashing the training process.
+                self.summary_writers[category].flush()
+            except Exception:
+                logger.error(
+                    "TensorBoard SummaryWriter.flush() failed; continuing training."
+                )
 
     def _maybe_create_summary_writer(self, category: str) -> None:
         if category not in self.summary_writers:
@@ -283,7 +290,12 @@ class TensorboardWriter(StatsWriter):
             self._maybe_create_summary_writer(category)
             if summary is not None:
                 self.summary_writers[category].add_text("Hyperparameters", summary)
-                self.summary_writers[category].flush()
+                try:
+                    self.summary_writers[category].flush()
+                except Exception:
+                    logger.error(
+                        "TensorBoard SummaryWriter.flush() failed while writing hyperparameters; continuing training."
+                    )
 
 
 class StatsReporter:

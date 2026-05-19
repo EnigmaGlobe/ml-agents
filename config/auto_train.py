@@ -28,7 +28,7 @@ import sys
 import time
 from pathlib import Path
 
-CONDA_EXE = r"C:\tools\Anaconda3\condabin\conda.bat"
+CONDA_EXE = r"C:\Users\infra\anaconda3\condabin\conda.bat"
 UNITY_EXE = r"C:\soqqle\ml-agents\config\PushBlockHeadless\UnityEnvironment.exe"
 EXPORT_SCRIPT = Path(r"C:\soqqle\ml-agents\config\export_tensor.py")
 RESULTS_BASE = Path(r"C:\soqqle\ml-agents\config\results")
@@ -139,14 +139,16 @@ def is_training_failed(line: str) -> bool:
 
 def run_training(yaml_config: str, run_num: int, train_num: int) -> int:
     """Run mlagents-learn and return the process exit code."""
-    train_id = f"train_{train_num:02d}"
+    train_folder = f"train_{train_num:02d}"
     train_dir = setup_train_dirs(run_num, train_num)
+    # Make the run-id globally unique by including the run number
+    run_id = f"run_{run_num:02d}_{train_folder}"
     ml_temp = train_dir / "_ml_temp"
-    log_file = train_dir / "train_log" / f"{train_id}.log"
+    log_file = train_dir / "train_log" / f"{train_folder}.log"
     metric_li_dir = train_dir / "metric" / "learning improvement"
 
     print(f"\n{'='*60}")
-    print(f"[TRAIN] Starting training: run=run_{run_num:02d}, id={train_id}")
+    print(f"[TRAIN] Starting training: run=run_{run_num:02d}, id={run_id}")
     print(f"[TRAIN] Config: {yaml_config}")
     print(f"[TRAIN] Output: {train_dir}")
     print(f"{'='*60}\n")
@@ -161,9 +163,9 @@ def run_training(yaml_config: str, run_num: int, train_num: int) -> int:
         f'set PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python\n'
         f'set PUSHBLOCK_CSV_DIR={metric_li_posix}\n'
         f'set PUSHBLOCK_METADATA_DIR={recordings_posix}\n'
-        f'set PUSHBLOCK_RUN_ID={train_id}\n'
+        f'set PUSHBLOCK_RUN_ID={run_id}\n'
         f'call "{CONDA_EXE}" activate mlagents\n'
-        f'mlagents-learn "{yaml_config}" --run-id {train_id} --force --env "{UNITY_EXE}" --results-dir "{results_dir_posix}"\n'
+        f'mlagents-learn "{yaml_config}" --run-id {run_id} --force --env "{UNITY_EXE}" --results-dir "{results_dir_posix}"\n'
     )
     batch_file = train_dir / "_run.bat"
     batch_file.write_text(batch_content)
@@ -172,7 +174,7 @@ def run_training(yaml_config: str, run_num: int, train_num: int) -> int:
     env['PYTHONUNBUFFERED'] = '1'
     env['PUSHBLOCK_CSV_DIR'] = str(metric_li_dir)
     env['PUSHBLOCK_METADATA_DIR'] = str(train_dir / "recordings")
-    env['PUSHBLOCK_RUN_ID'] = train_id
+    env['PUSHBLOCK_RUN_ID'] = run_id
     env['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
 
     process = subprocess.Popen(
@@ -185,7 +187,8 @@ def run_training(yaml_config: str, run_num: int, train_num: int) -> int:
     last_step_seen = -1
     try:
         while process.poll() is None:
-            time.sleep(2)
+            # Poll log every 30 minutes to avoid flooding the terminal
+            time.sleep(1800)
             try:
                 with open(log_file, "r", encoding="utf-8", errors="replace") as f:
                     for line in f:
