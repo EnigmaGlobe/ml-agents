@@ -4,7 +4,7 @@ Auto-run ml-agents training with organized output directories.
 
 Directory layout per training run:
     results/run_XX/train_YY/
-        _ml_temp/          ← ML-Agents 原始输出，保留
+        _ml_temp/          ← ML-Agents
         metric/
             learning improvement/
         recordings/
@@ -185,7 +185,7 @@ def run_training(yaml_config: str, run_num: int, train_num: int) -> int:
     last_step_seen = -1
     try:
         while process.poll() is None:
-            time.sleep(2)
+            time.sleep(1800)
             try:
                 with open(log_file, "r", encoding="utf-8", errors="replace") as f:
                     for line in f:
