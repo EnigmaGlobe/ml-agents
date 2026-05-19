@@ -1,0 +1,19 @@
+behaviors:
+  MyBehavior:
+    trainer_type: ppo
+    hyperparameters:
+      batch_size: 64
+      buffer_size: 256
+      learning_rate: 3.0e-4
+    network_settings:
+      normalize: false
+    reward_signals:
+      jepa:
+        strength: 0.01
+        freeze: true
+        history_size: 3
+        num_preds: 1
+        mode: frozen_preextracted
+    max_steps: 1000
+    time_horizon: 64
+    summary_freq: 100

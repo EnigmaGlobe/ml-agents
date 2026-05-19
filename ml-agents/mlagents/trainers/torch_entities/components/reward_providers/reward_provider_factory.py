@@ -18,6 +18,9 @@ from mlagents.trainers.torch_entities.components.reward_providers.gail_reward_pr
 from mlagents.trainers.torch_entities.components.reward_providers.rnd_reward_provider import (
     RNDRewardProvider,
 )
+from mlagents.trainers.torch_entities.components.reward_providers.c_jepa_reward_provider import (
+    CJepaRewardProvider,
+)
 
 from mlagents_envs.base_env import BehaviorSpec
 
@@ -25,6 +28,7 @@ NAME_TO_CLASS: Dict[RewardSignalType, Type[BaseRewardProvider]] = {
     RewardSignalType.EXTRINSIC: ExtrinsicRewardProvider,
     RewardSignalType.CURIOSITY: CuriosityRewardProvider,
     RewardSignalType.GAIL: GAILRewardProvider,
+    RewardSignalType.JEPA: CJepaRewardProvider,
     RewardSignalType.RND: RNDRewardProvider,
 }
 

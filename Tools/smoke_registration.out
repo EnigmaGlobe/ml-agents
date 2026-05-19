@@ -1,0 +1,5 @@
+python=C:\new\ml-agents\.venv\Scripts\python.exe
+import: reward_provider_factory OK
+factory_attrs: BaseRewardProvider,BehaviorSpec,CJepaRewardProvider,CuriosityRewardProvider,Dict,ExtrinsicRewardProvider,GAILRewardProvider,NAME_TO_CLASS,RNDRewardProvider,RewardSignalSettings,RewardSignalType,Type,UnityTrainerException,create_reward_provider
+import: CJepaRewardProvider OK
+settings: JepaSettings FOUND

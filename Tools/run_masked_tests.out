@@ -1,0 +1,411 @@
+
+============================== warnings summary ===============================
+.venv\Lib\site-packages\google\protobuf\internal\well_known_types.py:91
+  C:\new\ml-agents\.venv\Lib\site-packages\google\protobuf\internal\well_known_types.py:91: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).
+    _EPOCH_DATETIME_NAIVE = datetime.datetime.utcfromtimestamp(0)
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:18
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:18: DeprecationWarning: Call to deprecated create function FileDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    DESCRIPTOR = _descriptor.FileDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:35
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:35: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:42
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:42: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:49
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:49: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:56
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:56: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:63
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:63: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:70
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:70: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:77
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:77: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:84
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:84: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:28
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:28: DeprecationWarning: Call to deprecated create function Descriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _TRAININGENVIRONMENTINITIALIZED = _descriptor.Descriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:115
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:115: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:122
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:122: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:129
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:129: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:136
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:136: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:143
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:143: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:150
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:150: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:157
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:157: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:164
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:164: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:171
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:171: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:178
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:178: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:185
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:185: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:192
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:192: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:199
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:199: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:206
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:206: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:213
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:213: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:108
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\training_analytics_pb2.py:108: DeprecationWarning: Call to deprecated create function Descriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _TRAININGBEHAVIORINITIALIZED = _descriptor.Descriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\command_pb2.py:19
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\command_pb2.py:19: DeprecationWarning: Call to deprecated create function FileDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    DESCRIPTOR = _descriptor.FileDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\command_pb2.py:32
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\command_pb2.py:32: DeprecationWarning: Call to deprecated create function EnumValueDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.EnumValueDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\command_pb2.py:36
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\command_pb2.py:36: DeprecationWarning: Call to deprecated create function EnumValueDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.EnumValueDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\command_pb2.py:40
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\command_pb2.py:40: DeprecationWarning: Call to deprecated create function EnumValueDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.EnumValueDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\command_pb2.py:26
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\command_pb2.py:26: DeprecationWarning: Call to deprecated create function EnumDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _COMMANDPROTO = _descriptor.EnumDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:19
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:19: DeprecationWarning: Call to deprecated create function FileDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    DESCRIPTOR = _descriptor.FileDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:32
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:32: DeprecationWarning: Call to deprecated create function EnumValueDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.EnumValueDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:36
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:36: DeprecationWarning: Call to deprecated create function EnumValueDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.EnumValueDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:26
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:26: DeprecationWarning: Call to deprecated create function EnumDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _COMPRESSIONTYPEPROTO = _descriptor.EnumDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:55
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:55: DeprecationWarning: Call to deprecated create function EnumValueDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.EnumValueDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:59
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:59: DeprecationWarning: Call to deprecated create function EnumValueDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.EnumValueDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:49
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:49: DeprecationWarning: Call to deprecated create function EnumDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _OBSERVATIONTYPEPROTO = _descriptor.EnumDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:86
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:86: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:79
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:79: DeprecationWarning: Call to deprecated create function Descriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _OBSERVATIONPROTO_FLOATDATA = _descriptor.Descriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:116
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:116: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:123
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:123: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:130
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:130: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:137
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:137: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:144
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:144: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:151
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:151: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:158
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:158: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:165
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:165: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:183
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:183: DeprecationWarning: Call to deprecated create function OneofDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.OneofDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:109
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\observation_pb2.py:109: DeprecationWarning: Call to deprecated create function Descriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _OBSERVATIONPROTO = _descriptor.Descriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_info_pb2.py:19
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_info_pb2.py:19: DeprecationWarning: Call to deprecated create function FileDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    DESCRIPTOR = _descriptor.FileDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_info_pb2.py:37
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_info_pb2.py:37: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_info_pb2.py:44
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_info_pb2.py:44: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_info_pb2.py:51
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_info_pb2.py:51: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_info_pb2.py:58
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_info_pb2.py:58: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_info_pb2.py:65
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_info_pb2.py:65: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_info_pb2.py:72
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_info_pb2.py:72: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_info_pb2.py:79
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_info_pb2.py:79: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_info_pb2.py:86
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_info_pb2.py:86: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_info_pb2.py:30
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_info_pb2.py:30: DeprecationWarning: Call to deprecated create function Descriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _AGENTINFOPROTO = _descriptor.Descriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\space_type_pb2.py:19
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\space_type_pb2.py:19: DeprecationWarning: Call to deprecated create function FileDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    DESCRIPTOR = _descriptor.FileDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\space_type_pb2.py:32
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\space_type_pb2.py:32: DeprecationWarning: Call to deprecated create function EnumValueDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.EnumValueDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\space_type_pb2.py:36
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\space_type_pb2.py:36: DeprecationWarning: Call to deprecated create function EnumValueDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.EnumValueDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\space_type_pb2.py:26
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\space_type_pb2.py:26: DeprecationWarning: Call to deprecated create function EnumDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _SPACETYPEPROTO = _descriptor.EnumDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:19
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:19: DeprecationWarning: Call to deprecated create function FileDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    DESCRIPTOR = _descriptor.FileDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:37
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:37: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:44
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:44: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:51
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:51: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:58
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:58: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:30
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:30: DeprecationWarning: Call to deprecated create function Descriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _ACTIONSPECPROTO = _descriptor.Descriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:89
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:89: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:96
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:96: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:103
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:103: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:110
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:110: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:117
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:117: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:124
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:124: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:82
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\brain_parameters_pb2.py:82: DeprecationWarning: Call to deprecated create function Descriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _BRAINPARAMETERSPROTO = _descriptor.Descriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_action_pb2.py:18
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_action_pb2.py:18: DeprecationWarning: Call to deprecated create function FileDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    DESCRIPTOR = _descriptor.FileDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_action_pb2.py:35
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_action_pb2.py:35: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_action_pb2.py:42
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_action_pb2.py:42: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_action_pb2.py:49
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_action_pb2.py:49: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_action_pb2.py:56
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_action_pb2.py:56: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_action_pb2.py:28
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\agent_action_pb2.py:28: DeprecationWarning: Call to deprecated create function Descriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _AGENTACTIONPROTO = _descriptor.Descriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_input_pb2.py:20
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_input_pb2.py:20: DeprecationWarning: Call to deprecated create function FileDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    DESCRIPTOR = _descriptor.FileDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_input_pb2.py:38
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_input_pb2.py:38: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_input_pb2.py:31
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_input_pb2.py:31: DeprecationWarning: Call to deprecated create function Descriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _UNITYRLINPUTPROTO_LISTAGENTACTIONPROTO = _descriptor.Descriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_input_pb2.py:68
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_input_pb2.py:68: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_input_pb2.py:75
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_input_pb2.py:75: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_input_pb2.py:61
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_input_pb2.py:61: DeprecationWarning: Call to deprecated create function Descriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _UNITYRLINPUTPROTO_AGENTACTIONSENTRY = _descriptor.Descriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_input_pb2.py:105
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_input_pb2.py:105: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_input_pb2.py:112
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_input_pb2.py:112: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_input_pb2.py:119
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_input_pb2.py:119: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_input_pb2.py:98
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_input_pb2.py:98: DeprecationWarning: Call to deprecated create function Descriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _UNITYRLINPUTPROTO = _descriptor.Descriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_output_pb2.py:19
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_output_pb2.py:19: DeprecationWarning: Call to deprecated create function FileDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    DESCRIPTOR = _descriptor.FileDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_output_pb2.py:37
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_output_pb2.py:37: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_output_pb2.py:30
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_output_pb2.py:30: DeprecationWarning: Call to deprecated create function Descriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _UNITYRLOUTPUTPROTO_LISTAGENTINFOPROTO = _descriptor.Descriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_output_pb2.py:67
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_output_pb2.py:67: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_output_pb2.py:74
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_output_pb2.py:74: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_output_pb2.py:60
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_output_pb2.py:60: DeprecationWarning: Call to deprecated create function Descriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _UNITYRLOUTPUTPROTO_AGENTINFOSENTRY = _descriptor.Descriptor(
+
+.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_output_pb2.py:104
+  C:\new\ml-agents\.venv\Lib\site-packages\mlagents_envs\communicator_objects\unity_rl_output_pb2.py:104: DeprecationWarning: Call to deprecated create function FieldDescriptor(). Note: Create unlinked descriptors is going to go away. Please use get/find descriptors from generated code or query the descriptor_pool.
+    _descriptor.FieldDescriptor(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+101 warnings in 0.01s
+
+ERROR: file or directory not found: mlagents/trainers/torch_entities/components/reward_providers/test_c_jepa_masked_update.py
+

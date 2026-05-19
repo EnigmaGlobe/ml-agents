@@ -106,3 +106,7 @@ Tools/ci/obj/
 Tools/ci/bin/
 *.dll
 *.bat
+*.png
+/Project/Assets/ML-Agents/Examples/PushBlock/metadata/recordings/20260511_144125/chunk_000001
+/Project/Assets/ML-Agents/Examples/PushBlock/metadata/recordings/20260511_150342
+/Project/Assets/ML-Agents/Examples/PushBlock/metadata/recordings

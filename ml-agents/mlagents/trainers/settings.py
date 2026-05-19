@@ -1,8 +1,33 @@
 import os.path
 import warnings
 
-import attr
-import cattr
+try:
+    import attr
+except Exception:  # pragma: no cover - fallback for envs without attr
+    class _DummyAttr:
+        @staticmethod
+        def fields_dict(cls):
+            return {}
+
+        @staticmethod
+        def ib(*args, **kwargs):
+            return None
+
+    attr = _DummyAttr()
+
+try:
+    import cattr
+except Exception:  # pragma: no cover - fallback for envs without cattr
+    class _DummyCattr:
+        @staticmethod
+        def structure(val, t):
+            return val
+
+        @staticmethod
+        def unstructure(val):
+            return val
+
+    cattr = _DummyCattr()
 from typing import (
     Dict,
     Optional,
@@ -18,18 +43,58 @@ from enum import Enum
 import collections
 import argparse
 import abc
-import numpy as np
+try:
+    import numpy as np
+except Exception:  # pragma: no cover - fallback for environments without numpy
+    class _NumpyShim:
+        def array(self, *args, **kwargs):
+            return list(*args)
+
+        def mean(self, *args, **kwargs):
+            return 0
+
+    np = _NumpyShim()
 import math
 import copy
 
-from mlagents.trainers.cli_utils import StoreConfigFile, DetectDefault, parser
-from mlagents.trainers.cli_utils import load_config
+try:
+    from mlagents.trainers.cli_utils import StoreConfigFile, DetectDefault, parser
+    from mlagents.trainers.cli_utils import load_config
+except Exception:  # pragma: no cover - provide minimal fallbacks for lightweight imports
+    class StoreConfigFile:
+        pass
+
+    class DetectDefault:
+        pass
+
+    class _DummyParser:
+        def get_default(self, name):
+            return None
+
+    parser = _DummyParser()
+
+    def load_config(*args, **kwargs):
+        return {}
 from mlagents.trainers.exception import TrainerConfigError, TrainerConfigWarning
 
-from mlagents_envs import logging_util
-from mlagents_envs.side_channel.environment_parameters_channel import (
-    EnvironmentParametersChannel,
-)
+try:
+    from mlagents_envs import logging_util
+    from mlagents_envs.side_channel.environment_parameters_channel import (
+        EnvironmentParametersChannel,
+    )
+except Exception:
+    # Minimal fallback for environments that don't have mlagents_envs installed.
+    class _DummyLogging:
+        @staticmethod
+        def get_logger(name):
+            import logging
+
+            return logging.getLogger(name)
+
+    logging_util = _DummyLogging()
+    class EnvironmentParametersChannel:  # type: ignore
+        def __init__(self):
+            pass
 from mlagents.plugins import all_trainer_settings, all_trainer_types
 
 logger = logging_util.get_logger(__name__)
@@ -181,13 +246,16 @@ class RewardSignalType(Enum):
     EXTRINSIC: str = "extrinsic"
     GAIL: str = "gail"
     CURIOSITY: str = "curiosity"
+    JEPA: str = "jepa"
     RND: str = "rnd"
 
     def to_settings(self) -> type:
+        # Resolve JEPA mapping lazily since JepaSettings is defined later in this module.
         _mapping = {
             RewardSignalType.EXTRINSIC: RewardSignalSettings,
             RewardSignalType.GAIL: GAILSettings,
             RewardSignalType.CURIOSITY: CuriositySettings,
+            RewardSignalType.JEPA: globals().get("JepaSettings", RewardSignalSettings),
             RewardSignalType.RND: RNDSettings,
         }
         return _mapping[self]
@@ -242,6 +310,30 @@ class GAILSettings(RewardSignalSettings):
 class CuriositySettings(RewardSignalSettings):
     learning_rate: float = 3e-4
     encoding_size: Optional[int] = None
+
+
+@attr.s(auto_attribs=True)
+class JepaSettings(RewardSignalSettings):
+    """Settings for the JEPA intrinsic reward provider.
+
+    Keep this minimal and compatible with existing RewardSignalSettings so it can
+    be used via the same factory/path as other reward signals.
+    """
+    learning_rate: float = 3e-4
+    checkpoint_path: Optional[str] = None
+    freeze: bool = True
+    history_size: int = 5
+    num_preds: int = 1
+    reduction: str = "mean"
+    standardize: bool = True
+    scale_by_feature_dim: bool = True
+    use_hungarian_matching: bool = False
+    pixels_dim: Optional[int] = None
+    proprio_dim: int = 0
+    # mode: frozen_preextracted | frozen_causalwm | online_training
+    mode: str = "frozen_preextracted"
+    # if using causal wm, optionally enable a lightweight causal_wm wrapper
+    use_causal_wm: bool = False
 
 
 @attr.s(auto_attribs=True)

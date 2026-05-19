@@ -1,0 +1,10 @@
+torch: 2.12.0+cpu
+
+Running evaluate test...
+evaluate test: PASS
+
+Running update test...
+update test: PASS
+
+Running smoke script...
+smoke: DONE

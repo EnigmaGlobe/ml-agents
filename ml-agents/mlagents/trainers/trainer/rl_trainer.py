@@ -212,6 +212,23 @@ class RLTrainer(Trainer):
         Saves training statistics to Tensorboard.
         """
         self.stats_reporter.add_stat("Is Training", float(self.should_still_train))
+        # Allow reward providers to report custom metrics into the StatsReporter
+        try:
+            if hasattr(self, "optimizer") and self.optimizer is not None:
+                for reward_provider in self.optimizer.reward_signals.values():
+                    if hasattr(reward_provider, "report_metrics"):
+                        try:
+                            reward_provider.report_metrics(self.stats_reporter)
+                        except Exception:
+                            # Metric reporting must not break training; log and continue
+                            logger.exception(
+                                "Error while reporting metrics from reward provider %s",
+                                getattr(reward_provider, "name", str(type(reward_provider))),
+                            )
+        except Exception:
+            # Defensive: do not let any unexpected error in metric collection stop summary writes
+            logger.exception("Unexpected error while collecting reward provider metrics")
+
         self.stats_reporter.write_stats(int(step))
 
     @abc.abstractmethod
