@@ -183,11 +183,13 @@ def run_training(yaml_config: str, run_num: int, train_num: int) -> int:
 
     failed = False
     last_step_seen = -1
+    log_pos = 0
     try:
         while process.poll() is None:
-            time.sleep(1800)
+            time.sleep(5)
             try:
                 with open(log_file, "r", encoding="utf-8", errors="replace") as f:
+                    f.seek(log_pos)
                     for line in f:
                         line = line.rstrip()
                         if not line:
@@ -204,6 +206,7 @@ def run_training(yaml_config: str, run_num: int, train_num: int) -> int:
                         if is_training_failed(line):
                             print("\n[TRAIN] Training failure detected")
                             failed = True
+                    log_pos = f.tell()
             except FileNotFoundError:
                 pass
     except KeyboardInterrupt:
@@ -240,6 +243,101 @@ def post_training(run_num: int, train_num: int) -> bool:
     # Generate learning metrics
     _generate_learning_metrics(train_dir, train_id)
 
+    return True
+
+
+def compress_training_screenshots_to_video(train_dir: Path, fps: int = 25, crf: int = 28) -> bool:
+    """Find PNG screenshots under *train_dir* and compress them into an MP4 via FFmpeg.
+
+    Safety checks:
+      * FFmpeg exits with code 0
+      * Output MP4 exists and size > 0
+      * ffprobe reports a valid video stream (if available on PATH)
+    On success the PNG files and the empty screenshot directories are removed.
+    On failure the originals are kept and an error message is printed.
+    """
+    screenshots_dir = train_dir / "recordings" / "screenshots" / "chunk_000001"
+
+    if not screenshots_dir.exists():
+        print(f"[VIDEO] Screenshots dir not found ({screenshots_dir}), skipping.")
+        return True
+
+    png_files = sorted(screenshots_dir.glob("frame_*.png"))
+    if not png_files:
+        print(f"[VIDEO] No PNG frames in {screenshots_dir}, skipping.")
+        return True
+
+    train_id = train_dir.name
+    output_video = train_dir / "recordings" / f"{train_id}_recording.mp4"
+    input_pattern = screenshots_dir / "frame_%06d.png"
+
+    ffmpeg_cmd = [
+        "ffmpeg",
+        "-y",
+        "-framerate", str(fps),
+        "-start_number", "1",
+        "-i", str(input_pattern),
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", str(crf),
+        "-pix_fmt", "yuv420p",
+        str(output_video),
+    ]
+
+    print(f"[VIDEO] Encoding {len(png_files)} frames -> {output_video.name}")
+    try:
+        result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+    except FileNotFoundError:
+        print("[ERROR] FFmpeg not found. Please install FFmpeg and add it to PATH.")
+        return False
+
+    if result.returncode != 0:
+        print(f"[ERROR] FFmpeg failed (exit code {result.returncode})")
+        if result.stderr:
+            print(f"[ERROR] {result.stderr.strip()}")
+        return False
+
+    if not output_video.exists() or output_video.stat().st_size == 0:
+        print(f"[ERROR] Output MP4 missing or empty: {output_video}")
+        return False
+
+    # Validate with ffprobe when available
+    ffprobe_cmd = [
+        "ffprobe",
+        "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=codec_name",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        str(output_video),
+    ]
+    try:
+        probe = subprocess.run(ffprobe_cmd, capture_output=True, text=True)
+        if probe.returncode != 0 or not probe.stdout.strip():
+            print(f"[ERROR] ffprobe validation failed for {output_video}")
+            if probe.stderr:
+                print(f"[ERROR] {probe.stderr.strip()}")
+            return False
+        print(f"[VIDEO] ffprobe validation passed ({probe.stdout.strip()})")
+    except FileNotFoundError:
+        print("[WARN] ffprobe not found, skipping video validation")
+
+    # Safe to delete PNGs
+    deleted = 0
+    for png in png_files:
+        try:
+            png.unlink()
+            deleted += 1
+        except OSError as e:
+            print(f"[WARN] Could not delete {png}: {e}")
+
+    # Remove empty directories up to (but not including) recordings/
+    try:
+        screenshots_dir.rmdir()          # chunk_000001
+        screenshots_dir.parent.rmdir()   # screenshots
+    except OSError:
+        pass
+
+    print(f"[OK] Video saved to {output_video} ({deleted} frames removed)")
     return True
 
 
@@ -305,6 +403,13 @@ def main() -> int:
         if not success:
             train_id = f"train_{train_num:02d}"
             print(f"[WARN] Post-training organization failed for {train_id}")
+
+        # Compress screenshots to MP4
+        train_id = f"train_{train_num:02d}"
+        train_dir = RESULTS_BASE / f"run_{run_num:02d}" / train_id
+        video_ok = compress_training_screenshots_to_video(train_dir, fps=25, crf=28)
+        if not video_ok:
+            print(f"[WARN] Screenshot compression failed for {train_id}, PNGs retained")
 
         train_num += 1
         run_count += 1
