@@ -285,16 +285,16 @@ def compress_training_screenshots_to_video(train_dir: Path, fps: int = 25, crf: 
     ]
 
     print(f"[VIDEO] Encoding {len(png_files)} frames -> {output_video.name}")
+    ffmpeg_log = train_dir / "train_log" / "ffmpeg.log"
     try:
-        result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+        with open(ffmpeg_log, "w", encoding="utf-8") as log_f:
+            result = subprocess.run(ffmpeg_cmd, stdout=log_f, stderr=subprocess.STDOUT)
     except FileNotFoundError:
         print("[ERROR] FFmpeg not found. Please install FFmpeg and add it to PATH.")
         return False
 
     if result.returncode != 0:
-        print(f"[ERROR] FFmpeg failed (exit code {result.returncode})")
-        if result.stderr:
-            print(f"[ERROR] {result.stderr.strip()}")
+        print(f"[ERROR] FFmpeg failed (exit code {result.returncode}), see {ffmpeg_log}")
         return False
 
     if not output_video.exists() or output_video.stat().st_size == 0:
