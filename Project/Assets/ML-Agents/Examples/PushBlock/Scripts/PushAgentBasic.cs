@@ -7,9 +7,12 @@ using UnityEngine;
 using Unity.MLAgents;
 using Unity.MLAgents.Actuators;
 using System.Diagnostics;
+using PushTEvolutionMvp;
 
 public class PushAgentBasic : Agent
 {
+    public static bool disableAllScreenshotCapture = false;
+
     /// <summary>
     /// The ground. The bounds are used to spawn the elements.
     /// </summary>
@@ -59,6 +62,13 @@ public class PushAgentBasic : Agent
     int m_episodeSteps = 0;
     float m_episodeCumulativeReward = 0f;
     bool m_episodeMetricsRecorded = false;
+    bool m_isEpisodeComplete = false;
+    bool m_lastEpisodeSuccessful = false;
+    float m_lastEpisodeReward = 0f;
+    float m_lastEpisodeNormalizedTaskProgress = 0f;
+    float m_lastEpisodeFinalGoalError = -1f;
+    float m_lastEpisodeTimeToGoal = -1f;
+    float m_episodeStartTime = 0f;
 
     [Header("Learning Improvement Logging")]
     public bool enableLearningImprovementLogs = true;
@@ -181,6 +191,13 @@ public class PushAgentBasic : Agent
     string m_dataDir;
     public int m_screenshotChunkSize = 500; // create new subfolder every 500 frames
     bool m_screenshotAutoAssigned = false;
+
+    public bool IsEpisodeComplete => m_isEpisodeComplete;
+    public bool WasLastEpisodeSuccessful => m_lastEpisodeSuccessful;
+    public float LastEpisodeReward => m_lastEpisodeReward;
+    public float LastEpisodeNormalizedTaskProgress => m_lastEpisodeNormalizedTaskProgress;
+    public float LastEpisodeFinalGoalError => m_lastEpisodeFinalGoalError;
+    public float LastEpisodeTimeToGoal => m_lastEpisodeTimeToGoal;
 
     protected override void Awake()
     {
@@ -771,8 +788,15 @@ public class PushAgentBasic : Agent
         // Reset episode-tracking state
         m_episodeSteps = 0;
         m_episodeCumulativeReward = 0f;
-    m_cumulativeRewardAtLastDecision = 0f;
+        m_cumulativeRewardAtLastDecision = 0f;
         m_episodeMetricsRecorded = false;
+        m_isEpisodeComplete = false;
+        m_lastEpisodeSuccessful = false;
+        m_lastEpisodeReward = 0f;
+        m_lastEpisodeNormalizedTaskProgress = 0f;
+        m_lastEpisodeFinalGoalError = -1f;
+        m_lastEpisodeTimeToGoal = -1f;
+        m_episodeStartTime = Time.time;
         m_episodeEndReason = "unknown";
 
         CaptureEpisodeStartMetrics();
@@ -1345,7 +1369,13 @@ public class PushAgentBasic : Agent
         }
         finally
         {
+            m_lastEpisodeSuccessful = success;
+            m_lastEpisodeReward = m_episodeCumulativeReward;
+            m_lastEpisodeNormalizedTaskProgress = m_normalizedTaskProgress;
+            m_lastEpisodeFinalGoalError = m_finalBlockGoalDistance;
+            m_lastEpisodeTimeToGoal = success ? Mathf.Max(0f, Time.time - m_episodeStartTime) : -1f;
             m_episodeMetricsRecorded = true;
+            m_isEpisodeComplete = true;
         }
     }
 
@@ -1772,6 +1802,52 @@ public class PushAgentBasic : Agent
             UnityEngine.Debug.LogWarning("PushAgentBasic: ground collider has no PhysicMaterial; skipping friction assignment.");
         }
         UnityEngine.Debug.Log($"PushAgentBasic: Applied ground friction dynamic={dynamicF}, static={statF}");
+    }
+
+    void ApplyEvolutionGenome(PushTBlockGenome genome)
+    {
+        if (genome == null)
+        {
+            return;
+        }
+
+        if (m_BlockRb != null)
+        {
+            m_BlockRb.transform.localScale = new Vector3(genome.width, genome.height, genome.depth);
+            m_BlockRb.mass = genome.mass;
+            m_BlockRb.linearDamping = genome.blockDrag;
+            try
+            {
+                m_BlockRb.ResetInertiaTensor();
+            }
+            catch (System.Exception)
+            {
+            }
+        }
+
+        if (ground != null)
+        {
+            var groundCollider = ground.GetComponent<Collider>();
+            if (groundCollider != null)
+            {
+                var sourceMaterial = groundCollider.material;
+                if (sourceMaterial != null)
+                {
+                    var instanceMaterial = UnityEngine.Object.Instantiate(sourceMaterial);
+                    instanceMaterial.dynamicFriction = genome.dynamicFriction;
+                    instanceMaterial.staticFriction = genome.staticFriction;
+                    instanceMaterial.bounciness = genome.bounciness;
+                    groundCollider.material = instanceMaterial;
+                }
+            }
+        }
+    }
+
+    public void ResetEpisodeForEvolution(PushTBlockGenome genome, int episodeSeed)
+    {
+        Random.InitState(episodeSeed);
+        ApplyEvolutionGenome(genome);
+        OnEpisodeBegin();
     }
 
     public void SetBlockProperties()
