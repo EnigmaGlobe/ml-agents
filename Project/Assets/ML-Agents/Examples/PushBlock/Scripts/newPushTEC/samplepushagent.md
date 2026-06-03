@@ -1,0 +1,1833 @@
+//Put this script on your blue cube.
+
+using System.Collections;
+using System.Globalization;
+using System.IO;
+using UnityEngine;
+using Unity.MLAgents;
+using Unity.MLAgents.Actuators;
+using System.Diagnostics;
+
+public class PushAgentBasic : Agent
+{
+    /// <summary>
+    /// The ground. The bounds are used to spawn the elements.
+    /// </summary>
+    public GameObject ground;
+
+    public GameObject area;
+
+    /// <summary>
+    /// The area bounds.
+    /// </summary>
+    [HideInInspector]
+    public Bounds areaBounds;
+
+    PushBlockSettings m_PushBlockSettings;
+
+    /// <summary>
+    /// The goal to push the block to.
+    /// </summary>
+    public GameObject goal;
+
+    /// <summary>
+    /// The block to be pushed to the goal.
+    /// </summary>
+    public GameObject block;
+
+    /// <summary>
+    /// Fixed obstacle in the area (optional). If set, spawn logic will avoid this location.
+    /// </summary>
+    public GameObject obstacle;
+
+    /// <summary>
+    /// Detects when the block touches the goal.
+    /// </summary>
+    [HideInInspector]
+    public GoalDetect goalDetect;
+
+    public bool useVectorObs;
+
+    Rigidbody m_BlockRb;  //cached on initialization
+    Rigidbody m_AgentRb;  //cached on initialization
+    Collider m_BlockCollider; //cached on initialization
+    Collider m_GoalCollider; //cached on initialization
+    Material m_GroundMaterial; //cached on Awake()
+
+    /// <summary>
+    /// We will be changing the ground material based on success/failue
+    /// </summary>
+    Renderer m_GroundRenderer;
+
+    EnvironmentParameters m_ResetParams;
+    // Episode tracking for StatsRecorder
+    int m_episodeSteps = 0;
+    float m_episodeCumulativeReward = 0f;
+    bool m_episodeMetricsRecorded = false;
+
+    [Header("Learning Improvement Logging")]
+    public bool enableLearningImprovementLogs = true;
+    public string agentIdOverride = "";
+    public string learningImprovementLogPrefix = "[learning_improvement]";
+
+    [Header("Agent Efficiency Logging")]
+    public bool enableAgentEfficiencyLogs = true;
+    public string agentEfficiencyLogPrefix = "[agent_efficiency]";
+
+    [Header("Block Progress Logging")]
+    public bool enableBlockProgressLogs = true;
+    public string blockProgressLogPrefix = "[block_progress]";
+
+    [Header("Reliability Logging")]
+    public bool enableReliabilityLogs = true;
+    public string reliabilityLogPrefix = "[reliability]";
+
+    [Header("Control Quality Logging")]
+    public bool enableControlQualityLogs = true;
+    public string controlQualityLogPrefix = "[control_quality]";
+
+    int m_episodeId = 0;
+    Vector3 m_episodeStartAgentPos;
+    Vector3 m_episodeStartBlockPos;
+    Vector3 m_episodeEndBlockPos;
+    Vector3 m_episodeGoalPos;
+    float m_startBlockGoalDistance = -1f;
+    float m_finalBlockGoalDistance = -1f;
+    float m_normalizedBlockProgress = 0f;
+    float m_startGoalZoneErrorXZ = -1f;
+    float m_finalGoalZoneErrorXZ = -1f;
+    float m_normalizedTaskProgress = 0f;
+    float m_finalCenterDistanceXZ = -1f;
+    float m_finalCenterDistanceXYZ = -1f;
+    int m_successGoalConsistency = 0;
+    string m_episodeEndReason = "unknown";
+    string m_learningImprovementCsvPath;
+    string m_agentEfficiencyCsvPath;
+    string m_blockProgressCsvPath;
+    string m_reliabilityCsvPath;
+    string m_controlQualityCsvPath;
+
+    Vector3 m_previousAgentPos;
+    Vector3 m_previousBlockPos;
+    float m_previousBlockGoalDistance = -1f;
+    int m_previousAction = -1;
+    bool m_isTouchingBlock = false;
+    int m_firstContactStep = -1;
+    int m_contactSteps = 0;
+    int m_idleSteps = 0;
+    int m_actionChanges = 0;
+    int m_oppositeActionCount = 0;
+    float m_agentPathLength = 0f;
+    float m_blockPathLength = 0f;
+    float m_usefulBlockDisplacement = 0f;
+    float m_pathEfficiency = 0f;
+    float m_pushEfficiency = 0f;
+    float m_pushRatio = 0f;
+    float m_idleRatio = 0f;
+    float m_actionSwitchRate = 0f;
+    float m_oscillationIndex = 0f;
+    float m_startAgentToBlockDistance = 0f;
+    float m_progressRate = 0f;
+
+    int[] m_actionCounts = new int[7];
+    int m_controlSamples = 0;
+    float m_sumGoalVelocity = 0f;
+    float m_sumGoalVelocitySq = 0f;
+    float m_sumGoalVelocityDeltaSq = 0f;
+    float m_prevGoalVelocity = 0f;
+    float m_prevGoalVelocityDelta = 0f;
+    float m_sumAngularSpeed = 0f;
+    float m_sumAngularSpeedSq = 0f;
+    int m_sameActionSteps = 0;
+    int m_totalActionTransitions = 0;
+    float m_totalActionDelta = 0f;
+    float m_goalVelocityMean = 0f;
+    float m_goalVelocityVariance = 0f;
+    float m_goalVelocityAccelerationVariance = 0f;
+    float m_goalVelocityJerk = 0f;
+    float m_rotationVariance = 0f;
+    float m_actionEntropy = 0f;
+    float m_repeatedActionRatio = 0f;
+    float m_policySmoothness = 0f;
+
+    // Per-frame logging
+    [Header("Per-Frame Logging")]
+    public bool enablePerFrameLogs = true;
+    public string perFrameLogPrefix = "[per_frame]";
+    string m_actionCsvPath;
+    string m_observationCsvPath;
+    string m_runStamp;
+    bool m_obsRowWritten = false;
+    // Cache last action so non-decision frames reuse it
+    int m_lastAction = 0;
+    float m_lastActionX = 0f;
+    float m_lastActionY = 0f;
+    // Reward tracking: now using a pending per-decision reward written on the next rendered frame
+    // Pending decision reward written on next rendered frame (avoids frame-count mismatches)
+    float m_pendingDecisionReward = 0f;
+    bool m_pendingDecisionRewardAvailable = false;
+    // Track cumulative reward at the last decision so we can compute per-decision delta
+    float m_cumulativeRewardAtLastDecision = 0f;
+    // Screenshot capture (replace Unity Recorder)
+    [Header("Per-Frame Screenshot Capture")]
+    public bool enableScreenshotCapture = true;
+    public Camera screenshotCamera;
+    public int screenshotWidth = 360;
+    public int screenshotHeight = 360;
+    // Automatically assemble screenshots into a video after an episode/run
+    [Header("Post-Processing")]
+    public bool autoCreateVideo = false; // set true to run tools/make_video_from_frames.py automatically
+    public int videoFps = 30;
+    // Root directory for screenshots for this run; screenshots will be split into
+    // subfolders every `m_screenshotChunkSize` frames to create per-run chunks.
+    string m_screenshotRootDir;
+    // Root folder for this run (metadata/{runStamp}) and a data folder for CSVs & mp4
+    string m_runRoot;
+    string m_dataDir;
+    public int m_screenshotChunkSize = 500; // create new subfolder every 500 frames
+    bool m_screenshotAutoAssigned = false;
+
+    protected override void Awake()
+    {
+        base.Awake();
+        m_PushBlockSettings = FindAnyObjectByType<PushBlockSettings>();
+    }
+
+    public override void Initialize()
+    {
+        goalDetect = block.GetComponent<GoalDetect>();
+        goalDetect.agent = this;
+
+        // Cache the agent rigidbody
+        m_AgentRb = GetComponent<Rigidbody>();
+        // Cache the block rigidbody
+        m_BlockRb = block.GetComponent<Rigidbody>();
+        m_BlockCollider = block.GetComponent<Collider>();
+        m_GoalCollider = goal != null ? goal.GetComponent<Collider>() : null;
+        // Get the ground's bounds
+        areaBounds = ground.GetComponent<Collider>().bounds;
+        // Get the ground renderer so we can change the material when a goal is scored
+        m_GroundRenderer = ground.GetComponent<Renderer>();
+        // Starting material
+        m_GroundMaterial = m_GroundRenderer.material;
+
+        m_ResetParams = Academy.Instance.EnvironmentParameters;
+
+        SetResetParameters();
+
+        // --- learning_improvement CSV: env var override with fallback ---
+        var metricsDir = System.Environment.GetEnvironmentVariable("PUSHBLOCK_CSV_DIR");
+        if (!string.IsNullOrEmpty(metricsDir))
+        {
+            var stamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+            var dir = System.IO.Path.GetFullPath(metricsDir);
+            System.IO.Directory.CreateDirectory(dir);
+            m_learningImprovementCsvPath = System.IO.Path.Combine(dir, $"learning_improvement_{stamp}.csv");
+            UnityEngine.Debug.Log($"[PushBlock] Writing learning_improvement CSV to {dir} (stamp={stamp})");
+        }
+        else
+        {
+            m_learningImprovementCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "learning_improvement.csv");
+        }
+
+        // --- All other metrics: always initialized to default paths ---
+        m_agentEfficiencyCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "agent_efficiency.csv");
+        m_blockProgressCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "block_progress.csv");
+        m_reliabilityCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "reliability.csv");
+        m_controlQualityCsvPath = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "control_quality.csv");
+
+        // --- Per-run directory structure: env var override for headless training ---
+        var metadataDir = System.Environment.GetEnvironmentVariable("PUSHBLOCK_METADATA_DIR");
+        var runIdEnv = System.Environment.GetEnvironmentVariable("PUSHBLOCK_RUN_ID");
+        if (!string.IsNullOrEmpty(metadataDir) && !string.IsNullOrEmpty(runIdEnv))
+        {
+            m_runStamp = runIdEnv;
+            m_runRoot = System.IO.Path.GetFullPath(metadataDir);
+            System.IO.Directory.CreateDirectory(m_runRoot);
+            UnityEngine.Debug.Log($"[PushBlock] Using metadata dir from env: {m_runRoot} (runId={m_runStamp})");
+        }
+        else
+        {
+            m_runStamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
+            m_runRoot = Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "metadata", m_runStamp);
+        }
+
+        m_dataDir = Path.Combine(m_runRoot, "data_training");
+        Directory.CreateDirectory(m_dataDir);
+        m_actionCsvPath = Path.Combine(m_dataDir, $"actions_frame_{m_runStamp}.csv");
+        m_observationCsvPath = Path.Combine(m_dataDir, $"observations_frame_{m_runStamp}.csv");
+
+        // --- Initialize action/observation CSVs with headers + marker rows ---
+        var actionHeaderInit = "run_id,timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,action_x,action_y";
+        var obsHeaderInit = "run_id,timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,is_decision,reward,agent_pos_x,agent_pos_y,agent_pos_z,agent_rot_x,agent_rot_y,agent_rot_z,block_pos_x,block_pos_y,block_pos_z,block_vel_x,block_vel_y,block_vel_z,goal_pos_x,goal_pos_y,goal_pos_z";
+        m_actionCsvPath = EnsureCsvFileReady(m_actionCsvPath, actionHeaderInit, perFrameLogPrefix);
+        m_observationCsvPath = EnsureCsvFileReady(m_observationCsvPath, obsHeaderInit, perFrameLogPrefix);
+
+        var markerTimestamp = System.DateTime.Now.ToString("o", CultureInfo.InvariantCulture);
+        var actionMarker = string.Format(CultureInfo.InvariantCulture, "{0},{1},0,0,init,0,0,0,0,0", markerTimestamp, m_runStamp);
+        var obsMarker = string.Format(CultureInfo.InvariantCulture, "{0},{1},0,0,init,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0", markerTimestamp, m_runStamp);
+        File.AppendAllText(m_actionCsvPath, actionMarker + System.Environment.NewLine);
+        File.AppendAllText(m_observationCsvPath, obsMarker + System.Environment.NewLine);
+
+        // --- Screenshot directory + camera auto-assign ---
+        try
+        {
+            m_screenshotRootDir = Path.Combine(m_runRoot, "screenshots");
+            Directory.CreateDirectory(m_screenshotRootDir);
+
+            try
+            {
+                if (screenshotCamera == null)
+                {
+                    try
+                    {
+                        var tagged = GameObject.FindWithTag("recorder cam");
+                        if (tagged != null)
+                        {
+                            var cam = tagged.GetComponent<Camera>();
+                            if (cam != null)
+                            {
+                                screenshotCamera = cam;
+                                UnityEngine.Debug.Log($"{perFrameLogPrefix} screenshotCamera found by tag 'recorder cam' -> '{screenshotCamera.name}' for run {m_runStamp}");
+                            }
+                        }
+                    }
+                    catch { }
+
+                    if (screenshotCamera == null)
+                    {
+                        screenshotCamera = Camera.main;
+                    }
+                }
+
+                if (screenshotCamera == null)
+                {
+                    enableScreenshotCapture = false;
+                    UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} screenshot capture disabled: no screenshotCamera assigned, no 'recorder cam' found, and Camera.main is null.");
+                }
+                else
+                {
+                    UnityEngine.Debug.Log($"{perFrameLogPrefix} screenshotCamera set to '{screenshotCamera.name}' for run {m_runStamp}");
+                }
+            }
+            catch { }
+        }
+        catch { }
+    }
+
+    /// <summary>
+    /// Use the ground's bounds to pick a random spawn position.
+    /// </summary>
+    public Vector3 GetRandomSpawnPos()
+    {
+        var foundNewSpawnLocation = false;
+        var randomSpawnPos = Vector3.zero;
+        while (foundNewSpawnLocation == false)
+        {
+            var randomPosX = Random.Range(-areaBounds.extents.x * m_PushBlockSettings.spawnAreaMarginMultiplier,
+                areaBounds.extents.x * m_PushBlockSettings.spawnAreaMarginMultiplier);
+
+            var randomPosZ = Random.Range(-areaBounds.extents.z * m_PushBlockSettings.spawnAreaMarginMultiplier,
+                areaBounds.extents.z * m_PushBlockSettings.spawnAreaMarginMultiplier);
+            randomSpawnPos = ground.transform.position + new Vector3(randomPosX, 1f, randomPosZ);
+            if (Physics.CheckBox(randomSpawnPos, new Vector3(2.5f, 0.01f, 2.5f)) == false)
+            {
+                // If an obstacle is configured, ensure spawn location is not inside or too close to it.
+                if (obstacle != null)
+                {
+                    var obstacleCol = obstacle.GetComponent<Collider>();
+                    if (obstacleCol != null && obstacleCol.bounds.SqrDistance(randomSpawnPos) < 2.25f)
+                    {
+                        continue;
+                    }
+                }
+                foundNewSpawnLocation = true;
+            }
+        }
+        return randomSpawnPos;
+    }
+
+    /// <summary>
+    /// Called when the agent moves the block into the goal.
+    /// </summary>
+    public void ScoredAGoal()
+    {
+        // We use a reward of 5.
+        AddReward(5f);
+        m_episodeCumulativeReward += 5f;
+
+        // Ensure the per-decision reward delta is captured in the per-frame logs.
+        // Compute delta since last decision and queue it for the next rendered frame,
+        // then flush a per-frame write immediately so the +5 reward is recorded
+        // before EndEpisode resets episode state.
+        var rewardDelta = m_episodeCumulativeReward - m_cumulativeRewardAtLastDecision;
+        m_pendingDecisionReward = rewardDelta;
+        m_pendingDecisionRewardAvailable = true;
+        m_cumulativeRewardAtLastDecision = m_episodeCumulativeReward;
+
+        // Debug: record that we queued a pending reward for the decision
+        UnityEngine.Debug.Log($"{perFrameLogPrefix} queued_goal_reward {m_pendingDecisionReward:F6} episode={m_episodeId} step={m_episodeSteps}");
+
+        if (enablePerFrameLogs)
+        {
+            try
+            {
+                // As a robust fallback, immediately append an observation row for this decision
+                // so the +5 reward is guaranteed to appear in the CSV even if frame ordering
+                // or EndEpisode timing interferes with the Update-driven writer.
+                AppendImmediateObservationRow(m_pendingDecisionReward, /*isDecision=*/1);
+                // Prevent double-consumption by clearing the pending flag (we already wrote it).
+                m_pendingDecisionRewardAvailable = false;
+
+                // Still attempt the regular synchronous per-frame write to keep behavior unchanged
+                WritePerFrameLogs();
+                // Optionally assemble screenshots into a video automatically
+                if (autoCreateVideo && !string.IsNullOrEmpty(m_screenshotRootDir))
+                {
+                    // Don't spawn the python video creation while a trainer is connected
+                    // (Academy.Instance.IsCommunicatorOn == true). Also restrict to Editor
+                    // by default to avoid side-effects during headless training runs.
+                    var safeToRun = true;
+                    try
+                    {
+                        safeToRun = Application.isEditor || Academy.Instance == null || !Academy.Instance.IsCommunicatorOn;
+                    }
+                    catch { safeToRun = Application.isEditor; }
+
+                    if (safeToRun)
+                    {
+                        try
+                        {
+                            RunMakeVideoAsync(m_screenshotRootDir);
+                        }
+                        catch (System.Exception e)
+                        {
+                            UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} auto_video_failed_start {e.Message}");
+                        }
+                    }
+                    else
+                    {
+                        UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} auto_video_skipped training_active or communicator_on");
+                    }
+                }
+            }
+            catch (System.Exception e)
+            {
+                UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} failed_write_on_goal {e.Message}");
+            }
+        }
+
+        CaptureEpisodeEndMetrics(true, "goal");
+
+        // By marking an agent as done AgentReset() will be called automatically.
+        EndEpisode();
+
+        // Swap ground material for a bit to indicate we scored.
+        StartCoroutine(GoalScoredSwapGroundMaterial(m_PushBlockSettings.goalScoredMaterial, 0.5f));
+    }
+
+    /// <summary>
+    /// Swap ground material, wait time seconds, then swap back to the regular material.
+    /// </summary>
+    IEnumerator GoalScoredSwapGroundMaterial(Material mat, float time)
+    {
+        m_GroundRenderer.material = mat;
+        yield return new WaitForSeconds(time); // Wait for 2 sec
+        m_GroundRenderer.material = m_GroundMaterial;
+    }
+
+    /// <summary>
+    /// Moves the agent according to the selected action.
+    /// </summary>
+    public void MoveAgent(ActionSegment<int> act)
+    {
+        var dirToGo = Vector3.zero;
+        var rotateDir = Vector3.zero;
+
+        var action = act[0];
+
+        switch (action)
+        {
+            case 1:
+                dirToGo = transform.forward * 1f;
+                break;
+            case 2:
+                dirToGo = transform.forward * -1f;
+                break;
+            case 3:
+                rotateDir = transform.up * 1f;
+                break;
+            case 4:
+                rotateDir = transform.up * -1f;
+                break;
+            case 5:
+                dirToGo = transform.right * -0.75f;
+                break;
+            case 6:
+                dirToGo = transform.right * 0.75f;
+                break;
+        }
+        transform.Rotate(rotateDir, Time.fixedDeltaTime * 200f);
+        m_AgentRb.AddForce(dirToGo * m_PushBlockSettings.agentRunSpeed,
+            ForceMode.VelocityChange);
+    }
+
+    /// <summary>
+    /// Called every step of the engine. Here the agent takes an action.
+    /// </summary>
+    public override void OnActionReceived(ActionBuffers actionBuffers)
+
+    {
+        //UnityEngine.Debug.Log($"[DECISION] frame={Time.frameCount}, step={m_episodeSteps}");
+        // Track step count per episode
+        m_episodeSteps++;
+
+        // Move the agent using the action.
+        MoveAgent(actionBuffers.DiscreteActions);
+
+        var currentAction = actionBuffers.DiscreteActions[0];
+    // Cache last action (map discrete -> continuous for logging)
+    MapDiscreteToContinuous(currentAction, out m_lastActionX, out m_lastActionY);
+    m_lastAction = currentAction;
+        UpdateControlQualityMetrics(currentAction);
+        UpdateAgentEfficiencyMetrics(currentAction);
+
+    // Penalty given each step to encourage agent to finish task quickly.
+    var stepPenalty = -1f / MaxStep;
+    // Apply step penalty every action step (does not change decision timing)
+    AddReward(stepPenalty);
+    m_episodeCumulativeReward += stepPenalty;
+
+    // Decide whether this OnActionReceived corresponds to a decision (DecisionRequester)
+    var isDecisionNow = true;
+    try
+    {
+        var dr = GetComponent<Unity.MLAgents.DecisionRequester>();
+        if (dr != null && Unity.MLAgents.Academy.Instance != null)
+        {
+            isDecisionNow = (Unity.MLAgents.Academy.Instance.StepCount % dr.DecisionPeriod) == dr.DecisionStep;
+        }
+    }
+    catch { isDecisionNow = true; }
+
+    // Only compute and queue per-decision reward delta when this is actually a decision.
+    if (isDecisionNow)
+    {
+        var rewardDelta = m_episodeCumulativeReward - m_cumulativeRewardAtLastDecision;
+        m_pendingDecisionReward = rewardDelta;
+        m_pendingDecisionRewardAvailable = true;
+        // Update cumulative marker for next decision
+        m_cumulativeRewardAtLastDecision = m_episodeCumulativeReward;
+
+        // Immediately append an observation row for this decision so downstream
+        // analysis sees the per-decision delta exactly when the decision is made.
+        if (enablePerFrameLogs)
+        {
+            AppendImmediateObservationRow(m_pendingDecisionReward, /*isDecision=*/1);
+            // Prevent the Update-driven writer from writing the same pending reward again
+            m_pendingDecisionRewardAvailable = false;
+        }
+    }
+
+        // If we reached max steps and haven't recorded metrics yet, record as failure (success=0).
+        if (m_episodeSteps >= MaxStep && !m_episodeMetricsRecorded)
+        {
+            CaptureEpisodeEndMetrics(false, "timeout");
+        }
+
+    // Per-frame logging is now done every Update to match rendered frames; we cache the last action above
+    }
+
+    void WritePerFrameLogs(ActionBuffers actionBuffers)
+    {
+    // Delegate to the Update-driven writer which uses cached last-action values.
+    WritePerFrameLogs();
+    }
+
+    // New per-frame Update() to write logs every frame and reuse last action
+    void Update()
+    {
+        if (enablePerFrameLogs)
+        {
+            WritePerFrameLogs();
+        }
+        // If screenshots are enabled but no camera was available at Initialize,
+        // try to auto-assign one at runtime (handles cameras created/activated later).
+        if (enableScreenshotCapture && !m_screenshotAutoAssigned && screenshotCamera == null)
+        {
+            try
+            {
+                var tagged = GameObject.FindWithTag("recorder cam");
+                if (tagged != null)
+                {
+                    var cam = tagged.GetComponent<Camera>();
+                    if (cam != null)
+                    {
+                        screenshotCamera = cam;
+                    }
+                }
+            }
+            catch { }
+
+            if (screenshotCamera == null)
+            {
+                screenshotCamera = Camera.main;
+            }
+
+            if (screenshotCamera != null)
+            {
+                UnityEngine.Debug.Log($"{perFrameLogPrefix} screenshotCamera auto-assigned to '{screenshotCamera.name}' at frame {Time.frameCount}");
+                m_screenshotAutoAssigned = true;
+            }
+        }
+    }
+
+    void MapDiscreteToContinuous(int discreteAction, out float actionX, out float actionY)
+    {
+        actionX = 0f; actionY = 0f;
+        switch (discreteAction)
+        {
+            case 1: // forward
+                actionX = 0f; actionY = 1f;
+                break;
+            case 2: // backward
+                actionX = 0f; actionY = -1f;
+                break;
+            case 3: // rotate left, no linear movement
+                actionX = 0f; actionY = 0f;
+                break;
+            case 4: // rotate right, no linear movement
+                actionX = 0f; actionY = 0f;
+                break;
+            case 5: // strafe left
+                actionX = -0.75f; actionY = 0f;
+                break;
+            case 6: // strafe right
+                actionX = 0.75f; actionY = 0f;
+                break;
+            default:
+                actionX = 0f; actionY = 0f;
+                break;
+        }
+    }
+
+    // Overloaded WritePerFrameLogs with no arguments to be called from Update
+    void WritePerFrameLogs()
+    {
+        //UnityEngine.Debug.Log($"{perFrameLogPrefix} WritePerFrameLogs called, enableScreenshotCapture={enableScreenshotCapture}, screenshotCamera={screenshotCamera?.name}");
+
+    // Build CSV paths and headers (action has two continuous dims) — include run_id, frame_count and realtime_since_start
+    var actionHeader = "run_id,timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,action_x,action_y";
+    // Add 'is_decision' and 'reward' columns to observations (reward is non-zero only on decision frames)
+    var obsHeader = "run_id,timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,is_decision,reward,agent_pos_x,agent_pos_y,agent_pos_z,agent_rot_x,agent_rot_y,agent_rot_z,block_pos_x,block_pos_y,block_pos_z,block_vel_x,block_vel_y,block_vel_z,goal_pos_x,goal_pos_y,goal_pos_z";
+
+        m_actionCsvPath = EnsureCsvFileReady(m_actionCsvPath, actionHeader, perFrameLogPrefix);
+        m_observationCsvPath = EnsureCsvFileReady(m_observationCsvPath, obsHeader, perFrameLogPrefix);
+
+        var timestamp = System.DateTime.Now.ToString("o", CultureInfo.InvariantCulture);
+        var frameCount = Time.frameCount;
+        var realtime = Time.realtimeSinceStartup.ToString("F6", CultureInfo.InvariantCulture);
+        var agentId = GetAgentId();
+        var trainingStep = GetTrainingStep();
+        var stepIndex = m_episodeSteps;
+
+        float actionX = m_lastActionX;
+        float actionY = m_lastActionY;
+
+        var actionRow = string.Format(CultureInfo.InvariantCulture, "{0},{1},{2},{3},{4},{5},{6},{7},{8:F6},{9:F6}", m_runStamp, timestamp, frameCount, realtime, agentId, m_episodeId, trainingStep, stepIndex, actionX, actionY);
+
+        var agentPos = transform.position;
+        var agentRot = transform.eulerAngles;
+        var blockPos = block != null ? block.transform.position : Vector3.zero;
+        var blockVel = m_BlockRb != null ? m_BlockRb.linearVelocity : Vector3.zero;
+        var goalPos = goal != null ? goal.transform.position : Vector3.zero;
+
+        // Reward for this frame: if a pending decision reward exists, consume it on this rendered frame.
+        var rewardForFrame = 0f;
+        var isDecisionForFrame = 0; // 1 if this rendered frame corresponds to a decision
+        if (m_pendingDecisionRewardAvailable)
+        {
+            rewardForFrame = m_pendingDecisionReward;
+            m_pendingDecisionRewardAvailable = false;
+            isDecisionForFrame = 1;
+        }
+
+        var obsRow = string.Format(
+            CultureInfo.InvariantCulture,
+            "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9:F6},{10:F4},{11:F4},{12:F4},{13:F4},{14:F4},{15:F4},{16:F4},{17:F4},{18:F4},{19:F4},{20:F4},{21:F4},{22:F4},{23:F4}",
+            m_runStamp,
+            timestamp,
+            frameCount,
+            realtime,
+            agentId,
+            m_episodeId,
+            trainingStep,
+            stepIndex,
+            isDecisionForFrame,
+            rewardForFrame,
+            agentPos.x,
+            agentPos.y,
+            agentPos.z,
+            agentRot.x,
+            agentRot.y,
+            agentRot.z,
+            blockPos.x,
+            blockPos.y,
+            blockPos.z,
+            blockVel.x,
+            blockVel.y,
+            blockVel.z,
+            goalPos.x,
+            goalPos.y,
+            goalPos.z
+        );
+
+        try
+        {
+            File.AppendAllText(m_actionCsvPath, actionRow + System.Environment.NewLine);
+            File.AppendAllText(m_observationCsvPath, obsRow + System.Environment.NewLine);
+
+            if (!m_obsRowWritten)
+            {
+                UnityEngine.Debug.Log($"{perFrameLogPrefix} wrote_action_obs action_path={m_actionCsvPath} obs_path={m_observationCsvPath} step={stepIndex}");
+                m_obsRowWritten = true;
+            }
+            // Save screenshot for this frame if enabled (same as the ActionBuffers overload)
+            try
+            {
+                if (enableScreenshotCapture && screenshotCamera != null && !string.IsNullOrEmpty(m_screenshotRootDir))
+                {
+                    // Use a single chunk folder per run to avoid splitting frames across folders.
+                    var chunkFolder = Path.Combine(m_screenshotRootDir, "chunk_000001");
+                    if (!Directory.Exists(chunkFolder)) Directory.CreateDirectory(chunkFolder);
+
+                    var tex = new RenderTexture(screenshotWidth, screenshotHeight, 24);
+                    screenshotCamera.targetTexture = tex;
+                    var prev = RenderTexture.active;
+                    RenderTexture.active = tex;
+                    screenshotCamera.Render();
+                    var read = new Texture2D(screenshotWidth, screenshotHeight, TextureFormat.RGB24, false);
+                    read.ReadPixels(new Rect(0, 0, screenshotWidth, screenshotHeight), 0, 0);
+                    read.Apply();
+                    screenshotCamera.targetTexture = null;
+                    RenderTexture.active = prev;
+                    var bytes = read.EncodeToPNG();
+                    var fname = Path.Combine(chunkFolder, string.Format("frame_{0:D06}.png", frameCount));
+                    File.WriteAllBytes(fname, bytes);
+                    UnityEngine.Object.DestroyImmediate(read);
+                    UnityEngine.Object.DestroyImmediate(tex);
+                }
+            }
+            catch (System.Exception e)
+            {
+                UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} failed_screenshot exception={e.ToString()}");
+            }
+        }
+        catch (System.Exception e)
+        {
+            UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} failed_write_action_obs exception={e.ToString()}");
+        }
+    }
+
+    public override void Heuristic(in ActionBuffers actionsOut)
+    {
+        var discreteActionsOut = actionsOut.DiscreteActions;
+        if (Input.GetKey(KeyCode.D))
+        {
+            discreteActionsOut[0] = 3;
+        }
+        else if (Input.GetKey(KeyCode.W))
+        {
+            discreteActionsOut[0] = 1;
+        }
+        else if (Input.GetKey(KeyCode.A))
+        {
+            discreteActionsOut[0] = 4;
+        }
+        else if (Input.GetKey(KeyCode.S))
+        {
+            discreteActionsOut[0] = 2;
+        }
+    }
+
+    /// <summary>
+    /// Resets the block position and velocities.
+    /// </summary>
+    void ResetBlock()
+    {
+        // Get a random position for the block.
+        block.transform.position = GetRandomSpawnPos();
+
+        // Reset block velocity back to zero.
+        m_BlockRb.linearVelocity = Vector3.zero;
+
+        // Reset block angularVelocity back to zero.
+        m_BlockRb.angularVelocity = Vector3.zero;
+    }
+
+    /// <summary>
+    /// In the editor, if "Reset On Done" is checked then AgentReset() will be
+    /// called automatically anytime we mark done = true in an agent script.
+    /// </summary>
+    public override void OnEpisodeBegin()
+    {
+        m_episodeId++;
+
+        var rotation = Random.Range(0, 4);
+        var rotationAngle = rotation * 90f;
+        area.transform.Rotate(new Vector3(0f, rotationAngle, 0f));
+
+        ResetBlock();
+        transform.position = GetRandomSpawnPos();
+        m_AgentRb.linearVelocity = Vector3.zero;
+        m_AgentRb.angularVelocity = Vector3.zero;
+
+        // Reset episode-tracking state
+        m_episodeSteps = 0;
+        m_episodeCumulativeReward = 0f;
+    m_cumulativeRewardAtLastDecision = 0f;
+        m_episodeMetricsRecorded = false;
+        m_episodeEndReason = "unknown";
+
+        CaptureEpisodeStartMetrics();
+        CaptureAgentEfficiencyStartMetrics();
+        CaptureControlQualityStartMetrics();
+        LogReliability(
+            "start",
+            string.Format(
+                CultureInfo.InvariantCulture,
+                "agent={0} episode={1} training_step={2} start_reason=reset",
+                GetAgentId(),
+                m_episodeId,
+                GetTrainingStep()
+            )
+        );
+
+        SetResetParameters();
+    }
+
+    string GetAgentId()
+    {
+        return string.IsNullOrWhiteSpace(agentIdOverride) ? gameObject.name : agentIdOverride;
+    }
+
+    int GetTrainingStep()
+    {
+        return Academy.Instance != null ? Academy.Instance.StepCount : -1;
+    }
+
+    void LogLearningImprovement(string stage, string message)
+    {
+        if (!enableLearningImprovementLogs)
+        {
+            return;
+        }
+
+        UnityEngine.Debug.Log($"{learningImprovementLogPrefix} {stage} {message}");
+    }
+
+    string VectorToCsv(Vector3 v)
+    {
+        return string.Format(CultureInfo.InvariantCulture, "{0:F4},{1:F4},{2:F4}", v.x, v.y, v.z);
+    }
+
+    float DistanceXZ(Vector3 a, Vector3 b)
+    {
+        var dx = a.x - b.x;
+        var dz = a.z - b.z;
+        return Mathf.Sqrt(dx * dx + dz * dz);
+    }
+
+    float BoundsDistanceXZ(Bounds a, Bounds b)
+    {
+        var dx = Mathf.Max(0f, Mathf.Max(a.min.x - b.max.x, b.min.x - a.max.x));
+        var dz = Mathf.Max(0f, Mathf.Max(a.min.z - b.max.z, b.min.z - a.max.z));
+        return Mathf.Sqrt(dx * dx + dz * dz);
+    }
+
+    float GetGoalZoneErrorXZ()
+    {
+        if (m_BlockCollider != null && m_GoalCollider != null)
+        {
+            return BoundsDistanceXZ(m_BlockCollider.bounds, m_GoalCollider.bounds);
+        }
+
+        if (block != null && goal != null)
+        {
+            return DistanceXZ(block.transform.position, goal.transform.position);
+        }
+
+        return -1f;
+    }
+
+    void CaptureEpisodeStartMetrics()
+    {
+        m_episodeStartBlockPos = block != null ? block.transform.position : Vector3.zero;
+        m_episodeGoalPos = goal != null ? goal.transform.position : Vector3.zero;
+        m_startBlockGoalDistance = Vector3.Distance(m_episodeStartBlockPos, m_episodeGoalPos);
+        m_startGoalZoneErrorXZ = GetGoalZoneErrorXZ();
+
+        LogLearningImprovement(
+            "start",
+            string.Format(
+                CultureInfo.InvariantCulture,
+                "agent={0} episode={1} training_step={2} start_dist={3:F4} start_goal_zone_error_xz={6:F4} goal_pos=({4}) block_pos=({5})",
+                GetAgentId(),
+                m_episodeId,
+                GetTrainingStep(),
+                m_startBlockGoalDistance,
+                VectorToCsv(m_episodeGoalPos),
+                VectorToCsv(m_episodeStartBlockPos),
+                m_startGoalZoneErrorXZ
+            )
+        );
+
+        LogBlockProgress(
+            "start",
+            string.Format(
+                CultureInfo.InvariantCulture,
+                "agent={0} episode={1} training_step={2} start_dist={3:F4} goal_pos=({4}) block_pos=({5})",
+                GetAgentId(),
+                m_episodeId,
+                GetTrainingStep(),
+                m_startBlockGoalDistance,
+                VectorToCsv(m_episodeGoalPos),
+                VectorToCsv(m_episodeStartBlockPos)
+            )
+        );
+    }
+
+    void CaptureAgentEfficiencyStartMetrics()
+    {
+        m_episodeStartAgentPos = transform.position;
+        m_previousAgentPos = transform.position;
+        m_previousBlockPos = block != null ? block.transform.position : Vector3.zero;
+        m_startAgentToBlockDistance = block != null ? Vector3.Distance(m_episodeStartAgentPos, m_previousBlockPos) : 0f;
+        m_previousBlockGoalDistance = goal != null && block != null ? Vector3.Distance(m_previousBlockPos, goal.transform.position) : -1f;
+        m_previousAction = -1;
+        m_isTouchingBlock = false;
+        m_firstContactStep = -1;
+        m_contactSteps = 0;
+        m_idleSteps = 0;
+        m_actionChanges = 0;
+        m_oppositeActionCount = 0;
+        m_agentPathLength = 0f;
+        m_blockPathLength = 0f;
+        m_usefulBlockDisplacement = 0f;
+        m_pathEfficiency = 0f;
+        m_pushEfficiency = 0f;
+        m_pushRatio = 0f;
+        m_idleRatio = 0f;
+        m_actionSwitchRate = 0f;
+        m_oscillationIndex = 0f;
+
+        LogAgentEfficiency(
+            "start",
+            string.Format(
+                CultureInfo.InvariantCulture,
+                "agent={0} episode={1} training_step={2} agent_start=({3}) block_start=({4})",
+                GetAgentId(),
+                m_episodeId,
+                GetTrainingStep(),
+                VectorToCsv(m_episodeStartAgentPos),
+                VectorToCsv(m_previousBlockPos)
+            )
+        );
+    }
+
+    void CaptureControlQualityStartMetrics()
+    {
+        for (var i = 0; i < m_actionCounts.Length; i++)
+        {
+            m_actionCounts[i] = 0;
+        }
+
+        m_controlSamples = 0;
+        m_sumGoalVelocity = 0f;
+        m_sumGoalVelocitySq = 0f;
+        m_sumGoalVelocityDeltaSq = 0f;
+        m_prevGoalVelocity = 0f;
+        m_prevGoalVelocityDelta = 0f;
+        m_sumAngularSpeed = 0f;
+        m_sumAngularSpeedSq = 0f;
+        m_sameActionSteps = 0;
+        m_totalActionTransitions = 0;
+        m_totalActionDelta = 0f;
+        m_goalVelocityMean = 0f;
+        m_goalVelocityVariance = 0f;
+        m_goalVelocityAccelerationVariance = 0f;
+        m_goalVelocityJerk = 0f;
+        m_rotationVariance = 0f;
+        m_actionEntropy = 0f;
+        m_repeatedActionRatio = 0f;
+        m_policySmoothness = 0f;
+
+        LogControlQuality(
+            "start",
+            string.Format(
+                CultureInfo.InvariantCulture,
+                "agent={0} episode={1} training_step={2} start_reason=reset",
+                GetAgentId(),
+                m_episodeId,
+                GetTrainingStep()
+            )
+        );
+    }
+
+    void UpdateAgentEfficiencyMetrics(int currentAction)
+    {
+        if (block == null || goal == null)
+        {
+            return;
+        }
+
+        var currentAgentPos = transform.position;
+        var currentBlockPos = block.transform.position;
+        var currentBlockGoalDistance = Vector3.Distance(currentBlockPos, goal.transform.position);
+
+        var agentStepDistance = Vector3.Distance(currentAgentPos, m_previousAgentPos);
+        var blockStepDistance = Vector3.Distance(currentBlockPos, m_previousBlockPos);
+        var blockGoalDelta = m_previousBlockGoalDistance >= 0f ? m_previousBlockGoalDistance - currentBlockGoalDistance : 0f;
+
+        if (m_episodeSteps > 0 || m_previousAction >= 0)
+        {
+            m_agentPathLength += agentStepDistance;
+            m_blockPathLength += blockStepDistance;
+
+            if (blockGoalDelta > 0f)
+            {
+                m_usefulBlockDisplacement += blockGoalDelta;
+            }
+
+            if (m_isTouchingBlock)
+            {
+                m_contactSteps++;
+
+                if (m_firstContactStep < 0)
+                {
+                    m_firstContactStep = m_episodeSteps;
+                }
+            }
+
+            const float idleEpsilon = 0.001f;
+            if (agentStepDistance < idleEpsilon && blockStepDistance < idleEpsilon && Mathf.Abs(blockGoalDelta) < idleEpsilon)
+            {
+                m_idleSteps++;
+            }
+
+            if (m_previousAction >= 0 && currentAction != m_previousAction)
+            {
+                m_actionChanges++;
+            }
+
+            if (IsOppositeAction(m_previousAction, currentAction))
+            {
+                m_oppositeActionCount++;
+            }
+        }
+
+        m_previousAgentPos = currentAgentPos;
+        m_previousBlockPos = currentBlockPos;
+        m_previousBlockGoalDistance = currentBlockGoalDistance;
+        m_previousAction = currentAction;
+    }
+
+    void UpdateControlQualityMetrics(int currentAction)
+    {
+        if (block == null || goal == null)
+        {
+            return;
+        }
+
+        var goalDirection = goal.transform.position - block.transform.position;
+        var goalDirectionMagnitude = goalDirection.magnitude;
+        var normalizedGoalDirection = goalDirectionMagnitude > 0.0001f ? goalDirection / goalDirectionMagnitude : Vector3.zero;
+
+        var goalVelocity = Vector3.Dot(m_BlockRb.linearVelocity, normalizedGoalDirection);
+        var angularSpeed = m_AgentRb.angularVelocity.magnitude;
+        var goalVelocityDelta = goalVelocity - m_prevGoalVelocity;
+        var goalAccelerationDelta = goalVelocityDelta - m_prevGoalVelocityDelta;
+
+        m_controlSamples++;
+        m_sumGoalVelocity += goalVelocity;
+        m_sumGoalVelocitySq += goalVelocity * goalVelocity;
+        m_sumGoalVelocityDeltaSq += goalVelocityDelta * goalVelocityDelta;
+        m_sumAngularSpeed += angularSpeed;
+        m_sumAngularSpeedSq += angularSpeed * angularSpeed;
+
+        if (m_previousAction >= 0)
+        {
+            if (currentAction == m_previousAction)
+            {
+                m_sameActionSteps++;
+            }
+            else
+            {
+                m_totalActionTransitions++;
+                m_totalActionDelta += Mathf.Abs(currentAction - m_previousAction);
+            }
+        }
+
+        if (currentAction >= 0 && currentAction < m_actionCounts.Length)
+        {
+            m_actionCounts[currentAction]++;
+        }
+
+        m_goalVelocityJerk += Mathf.Abs(goalAccelerationDelta);
+        m_prevGoalVelocityDelta = goalVelocityDelta;
+        m_prevGoalVelocity = goalVelocity;
+        m_previousAction = currentAction;
+    }
+
+    bool IsOppositeAction(int previousAction, int currentAction)
+    {
+        return (previousAction == 1 && currentAction == 2) ||
+               (previousAction == 2 && currentAction == 1) ||
+               (previousAction == 3 && currentAction == 4) ||
+               (previousAction == 4 && currentAction == 3) ||
+               (previousAction == 5 && currentAction == 6) ||
+               (previousAction == 6 && currentAction == 5);
+    }
+
+    void LogAgentEfficiency(string stage, string message)
+    {
+        if (!enableAgentEfficiencyLogs)
+        {
+            return;
+        }
+
+        UnityEngine.Debug.Log($"{agentEfficiencyLogPrefix} {stage} {message}");
+    }
+
+    void LogBlockProgress(string stage, string message)
+    {
+        if (!enableBlockProgressLogs)
+        {
+            return;
+        }
+
+        UnityEngine.Debug.Log($"{blockProgressLogPrefix} {stage} {message}");
+    }
+
+    void LogControlQuality(string stage, string message)
+    {
+        if (!enableControlQualityLogs)
+        {
+            return;
+        }
+
+        UnityEngine.Debug.Log($"{controlQualityLogPrefix} {stage} {message}");
+    }
+
+    void LogReliability(string stage, string message)
+    {
+        if (!enableReliabilityLogs)
+        {
+            return;
+        }
+
+        UnityEngine.Debug.Log($"{reliabilityLogPrefix} {stage} {message}");
+    }
+
+    string ReadFirstLineShared(string path)
+    {
+        using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+        using (var reader = new StreamReader(stream))
+        {
+            return reader.ReadLine();
+        }
+    }
+
+    string BuildSchemaMismatchPath(string originalPath)
+    {
+        var directory = Path.GetDirectoryName(originalPath) ?? string.Empty;
+        var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(originalPath);
+        var extension = Path.GetExtension(originalPath);
+        var stamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
+        return Path.Combine(directory, $"{fileNameWithoutExtension}_{stamp}{extension}");
+    }
+
+    string EnsureCsvFileReady(string currentPath, string expectedHeader, string logPrefix)
+    {
+        var directory = Path.GetDirectoryName(currentPath);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        if (!File.Exists(currentPath))
+        {
+            File.WriteAllText(currentPath, expectedHeader + System.Environment.NewLine);
+            return currentPath;
+        }
+
+        var firstLine = ReadFirstLineShared(currentPath);
+        if (string.Equals(firstLine, expectedHeader, System.StringComparison.Ordinal))
+        {
+            return currentPath;
+        }
+
+        var redirectedPath = BuildSchemaMismatchPath(currentPath);
+        File.WriteAllText(redirectedPath, expectedHeader + System.Environment.NewLine);
+        UnityEngine.Debug.LogWarning($"{logPrefix} header_mismatch existing_csv={currentPath} redirected_csv={redirectedPath}");
+        return redirectedPath;
+    }
+
+    // Immediately append a single observation-style row to the observation CSV.
+    // This is used to guarantee that per-decision rewards (e.g. goal +5) appear
+    // in the file even if EndEpisode timing prevents the Update-driven writer
+    // from consuming the queued reward.
+    void AppendImmediateObservationRow(float reward, int isDecision)
+    {
+        try
+        {
+            var timestamp = System.DateTime.Now.ToString("o", CultureInfo.InvariantCulture);
+            var frameCount = Time.frameCount;
+            var realtime = Time.realtimeSinceStartup.ToString("F6", CultureInfo.InvariantCulture);
+            var agentId = GetAgentId();
+            var trainingStep = GetTrainingStep();
+            var stepIndex = m_episodeSteps;
+
+            var agentPos = transform.position;
+            var agentRot = transform.eulerAngles;
+            var blockPos = block != null ? block.transform.position : Vector3.zero;
+            var blockVel = m_BlockRb != null ? m_BlockRb.linearVelocity : Vector3.zero;
+            var goalPos = goal != null ? goal.transform.position : Vector3.zero;
+
+            var obsRow = string.Format(
+                CultureInfo.InvariantCulture,
+                "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9:F6},{10:F4},{11:F4},{12:F4},{13:F4},{14:F4},{15:F4},{16:F4},{17:F4},{18:F4},{19:F4},{20:F4},{21:F4},{22:F4},{23:F4},{24:F4}",
+                m_runStamp,
+                timestamp,
+                frameCount,
+                realtime,
+                agentId,
+                m_episodeId,
+                trainingStep,
+                stepIndex,
+                isDecision,
+                reward,
+                agentPos.x,
+                agentPos.y,
+                agentPos.z,
+                agentRot.x,
+                agentRot.y,
+                agentRot.z,
+                blockPos.x,
+                blockPos.y,
+                blockPos.z,
+                blockVel.x,
+                blockVel.y,
+                blockVel.z,
+                goalPos.x,
+                goalPos.y,
+                goalPos.z
+            );
+
+            m_observationCsvPath = EnsureCsvFileReady(m_observationCsvPath, "run_id,timestamp,frame_count,realtime_since_start,agent_id,episode_id,training_step,step_index,is_decision,reward,agent_pos_x,agent_pos_y,agent_pos_z,agent_rot_x,agent_rot_y,agent_rot_z,block_pos_x,block_pos_y,block_pos_z,block_vel_x,block_vel_y,block_vel_z,goal_pos_x,goal_pos_y,goal_pos_z", perFrameLogPrefix);
+            File.AppendAllText(m_observationCsvPath, obsRow + System.Environment.NewLine);
+            //UnityEngine.Debug.Log($"{perFrameLogPrefix} append_immediate_obs is_decision={isDecision} reward={reward:F6} path={m_observationCsvPath}");
+        }
+        catch (System.Exception e)
+        {
+            UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} failed_append_immediate_obs {e.Message}");
+        }
+    }
+
+    // Asynchronously run the Python tool to assemble screenshots into a video.
+    // This uses the system 'python' executable and the repository's tools/make_video_from_frames.py script.
+    void RunMakeVideoAsync(string screenshotRoot)
+    {
+        // Run in a thread-pool thread so we don't block Unity main thread.
+        System.Threading.Tasks.Task.Run(() =>
+        {
+            try
+            {
+                var repoRoot = Application.dataPath.Replace("/Assets", "").Replace("\\Assets", "");
+                var scriptPath = System.IO.Path.Combine(repoRoot, "tools", "make_video_from_frames.py");
+                if (!System.IO.File.Exists(scriptPath))
+                {
+                    UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} auto_video_script_missing script={scriptPath}");
+                    return;
+                }
+
+                var psi = new System.Diagnostics.ProcessStartInfo();
+                psi.FileName = "python";
+                psi.Arguments = string.Format("\"{0}\" \"{1}\" --fps {2}", scriptPath, screenshotRoot, videoFps);
+                psi.UseShellExecute = false;
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardError = true;
+                psi.CreateNoWindow = true;
+
+                using (var proc = new System.Diagnostics.Process())
+                {
+                    proc.StartInfo = psi;
+                    proc.OutputDataReceived += (sender, e) => { if (!string.IsNullOrEmpty(e.Data)) UnityEngine.Debug.Log($"{perFrameLogPrefix} ffmpeg_out {e.Data}"); };
+                    proc.ErrorDataReceived += (sender, e) => { if (!string.IsNullOrEmpty(e.Data)) UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} ffmpeg_err {e.Data}"); };
+                    proc.Start();
+                    proc.BeginOutputReadLine();
+                    proc.BeginErrorReadLine();
+                    // Wait but with timeout to avoid runaway blocking threads; large videos may take time.
+                    var finished = proc.WaitForExit(600000); // 10 minutes
+                    if (!finished)
+                    {
+                        try { proc.Kill(); } catch { }
+                        UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} auto_video_timeout script={scriptPath}");
+                    }
+                    else
+                    {
+                        UnityEngine.Debug.Log($"{perFrameLogPrefix} auto_video_completed script={scriptPath} exitCode={proc.ExitCode}");
+                        try
+                        {
+                            // The script writes recording.mp4 into the screenshotRoot (chunk folder).
+                            // Move it into the m_dataDir and rename to include the run stamp for clarity.
+                            var produced = System.IO.Path.Combine(screenshotRoot, "recording.mp4");
+                            if (System.IO.File.Exists(produced) && !string.IsNullOrEmpty(m_dataDir))
+                            {
+                                var destName = System.IO.Path.Combine(m_dataDir, $"{m_runStamp}_recording.mp4");
+                                // Overwrite if exists
+                                try { System.IO.File.Copy(produced, destName, true); UnityEngine.Debug.Log($"{perFrameLogPrefix} moved_recording dest={destName}"); }
+                                catch (System.Exception e) { UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} move_recording_failed {e.Message}"); }
+                            }
+                        }
+                        catch (System.Exception e)
+                        {
+                            UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} post_process_video_failed {e.Message}");
+                        }
+                    }
+                }
+            }
+            catch (System.Exception e)
+            {
+                UnityEngine.Debug.LogWarning($"{perFrameLogPrefix} auto_video_exception {e.Message}");
+            }
+        });
+    }
+
+    void CaptureEpisodeEndMetrics(bool success, string endReason)
+    {
+        if (m_episodeMetricsRecorded)
+        {
+            return;
+        }
+
+        m_episodeEndReason = endReason;
+        m_episodeEndBlockPos = block != null ? block.transform.position : Vector3.zero;
+        m_episodeGoalPos = goal != null ? goal.transform.position : Vector3.zero;
+        m_finalBlockGoalDistance = Vector3.Distance(m_episodeEndBlockPos, m_episodeGoalPos);
+        m_finalCenterDistanceXYZ = m_finalBlockGoalDistance;
+        m_finalCenterDistanceXZ = DistanceXZ(m_episodeEndBlockPos, m_episodeGoalPos);
+        m_finalGoalZoneErrorXZ = success ? 0f : GetGoalZoneErrorXZ();
+        m_successGoalConsistency = !success || m_finalGoalZoneErrorXZ <= 0.001f ? 1 : 0;
+
+        if (m_startBlockGoalDistance > 0.0001f)
+        {
+            m_normalizedBlockProgress = (m_startBlockGoalDistance - m_finalBlockGoalDistance) / m_startBlockGoalDistance;
+        }
+        else
+        {
+            m_normalizedBlockProgress = 0f;
+        }
+
+        if (m_startGoalZoneErrorXZ > 0.0001f && m_finalGoalZoneErrorXZ >= 0f)
+        {
+            m_normalizedTaskProgress = (m_startGoalZoneErrorXZ - m_finalGoalZoneErrorXZ) / Mathf.Max(m_startGoalZoneErrorXZ, 0.0001f);
+        }
+        else if (success)
+        {
+            m_normalizedTaskProgress = 1f;
+        }
+        else
+        {
+            m_normalizedTaskProgress = 0f;
+        }
+
+        var stats = Academy.Instance.StatsRecorder;
+        stats.Add("PushBlock/episode_reward", m_episodeCumulativeReward);
+        stats.Add("PushBlock/success", success ? 1 : 0);
+        stats.Add("PushBlock/episode_length", m_episodeSteps);
+        stats.Add("PushBlock/time_to_goal", success ? m_episodeSteps : -1);
+
+        try
+        {
+            ExportLearningImprovementSummary(success);
+            // Other metrics disabled in standalone builds to avoid path errors.
+            // ExportAgentEfficiencySummary(success);
+            // ExportBlockProgressSummary(success);
+            // ExportReliabilitySummary(success);
+            // ExportControlQualitySummary(success);
+        }
+        finally
+        {
+            m_episodeMetricsRecorded = true;
+        }
+    }
+
+    void ExportAgentEfficiencySummary(bool success)
+    {
+        if (!enableAgentEfficiencyLogs)
+        {
+            return;
+        }
+
+        var agentId = GetAgentId();
+        var trainingStep = GetTrainingStep();
+
+        if (m_agentPathLength > 0.0001f)
+        {
+            m_pathEfficiency = m_startAgentToBlockDistance / m_agentPathLength;
+            m_pushEfficiency = m_usefulBlockDisplacement / m_agentPathLength;
+        }
+        else
+        {
+            m_pathEfficiency = 0f;
+            m_pushEfficiency = 0f;
+        }
+
+        if (m_episodeSteps > 0)
+        {
+            m_pushRatio = (float)m_contactSteps / m_episodeSteps;
+            m_idleRatio = (float)m_idleSteps / m_episodeSteps;
+            m_actionSwitchRate = (float)m_actionChanges / m_episodeSteps;
+            m_oscillationIndex = (float)m_oppositeActionCount / m_episodeSteps;
+        }
+
+        var contactLatency = m_firstContactStep >= 0 ? m_firstContactStep : -1;
+
+        var row = string.Format(
+            CultureInfo.InvariantCulture,
+            "{0},{1},{2},{3},{4},{5:F4},{6:F4},{7},{8},{9:F4},{10:F4},{11:F4},{12:F4},{13:F4},{14:F4},{15:F4}",
+            agentId,
+            m_episodeId,
+            trainingStep,
+            success ? 1 : 0,
+            m_episodeEndReason,
+            m_agentPathLength,
+            m_blockPathLength,
+            contactLatency,
+            m_contactSteps,
+            m_pushRatio,
+            m_idleRatio,
+            m_actionSwitchRate,
+            m_oscillationIndex,
+            m_pathEfficiency,
+            m_pushEfficiency,
+            m_usefulBlockDisplacement
+        );
+
+        var header = "agent_id,episode_id,training_step,success,end_reason,agent_path_length,block_path_length,contact_latency,contact_steps,push_ratio,idle_ratio,action_switch_rate,oscillation_index,path_efficiency,push_efficiency,useful_block_displacement";
+        m_agentEfficiencyCsvPath = EnsureCsvFileReady(m_agentEfficiencyCsvPath, header, agentEfficiencyLogPrefix);
+        File.AppendAllText(m_agentEfficiencyCsvPath, row + System.Environment.NewLine);
+
+        LogAgentEfficiency(
+            "end",
+            string.Format(
+                CultureInfo.InvariantCulture,
+                "agent={0} episode={1} reason={2} steps={3} path_eff={4:F4} push_eff={5:F4} contact_latency={6} push_ratio={7:F4} idle_ratio={8:F4} action_switch_rate={9:F4} oscillation_index={10:F4}",
+                agentId,
+                m_episodeId,
+                m_episodeEndReason,
+                m_episodeSteps,
+                m_pathEfficiency,
+                m_pushEfficiency,
+                contactLatency,
+                m_pushRatio,
+                m_idleRatio,
+                m_actionSwitchRate,
+                m_oscillationIndex
+            )
+        );
+
+        LogAgentEfficiency(
+            "export",
+            string.Format(
+                CultureInfo.InvariantCulture,
+                "agent={0} episode={1} recorded=true csv_path={2}",
+                agentId,
+                m_episodeId,
+                m_agentEfficiencyCsvPath
+            )
+        );
+    }
+
+    void ExportBlockProgressSummary(bool success)
+    {
+        if (!enableBlockProgressLogs)
+        {
+            return;
+        }
+
+        var agentId = GetAgentId();
+        var trainingStep = GetTrainingStep();
+
+        if (m_episodeSteps > 0)
+        {
+            m_progressRate = m_normalizedBlockProgress / m_episodeSteps;
+        }
+        else
+        {
+            m_progressRate = 0f;
+        }
+
+        var row = string.Format(
+            CultureInfo.InvariantCulture,
+            "{0},{1},{2},{3},{4},{5:F4},{6:F4},{7:F4},{8:F4},{9:F4}",
+            agentId,
+            m_episodeId,
+            trainingStep,
+            success ? 1 : 0,
+            m_episodeEndReason,
+            m_startBlockGoalDistance,
+            m_finalBlockGoalDistance,
+            m_normalizedBlockProgress,
+            m_progressRate,
+            m_finalBlockGoalDistance
+        );
+
+        var header = "agent_id,episode_id,training_step,success,end_reason,start_block_goal_distance,final_block_goal_distance,normalized_block_progress,progress_rate,final_goal_error";
+        m_blockProgressCsvPath = EnsureCsvFileReady(m_blockProgressCsvPath, header, blockProgressLogPrefix);
+        File.AppendAllText(m_blockProgressCsvPath, row + System.Environment.NewLine);
+
+        LogBlockProgress(
+            "end",
+            string.Format(
+                CultureInfo.InvariantCulture,
+                "agent={0} episode={1} reason={2} steps={3} start_dist={4:F4} final_dist={5:F4} norm_progress={6:F4} progress_rate={7:F4}",
+                agentId,
+                m_episodeId,
+                m_episodeEndReason,
+                m_episodeSteps,
+                m_startBlockGoalDistance,
+                m_finalBlockGoalDistance,
+                m_normalizedBlockProgress,
+                m_progressRate
+            )
+        );
+
+        LogBlockProgress(
+            "export",
+            string.Format(
+                CultureInfo.InvariantCulture,
+                "agent={0} episode={1} recorded=true csv_path={2}",
+                agentId,
+                m_episodeId,
+                m_blockProgressCsvPath
+            )
+        );
+    }
+
+    void ExportReliabilitySummary(bool success)
+    {
+        if (!enableReliabilityLogs)
+        {
+            return;
+        }
+
+        var agentId = GetAgentId();
+        var trainingStep = GetTrainingStep();
+        var failureMode = success ? "none" : m_episodeEndReason;
+
+        var row = string.Format(
+            CultureInfo.InvariantCulture,
+            "{0},{1},{2},{3},{4},{5},{6:F4},{7:F4}",
+            agentId,
+            m_episodeId,
+            trainingStep,
+            success ? 1 : 0,
+            m_episodeEndReason,
+            failureMode,
+            m_episodeCumulativeReward,
+            m_finalBlockGoalDistance
+        );
+
+        var header = "agent_id,episode_id,training_step,success,end_reason,failure_mode,episode_reward,final_goal_error";
+        m_reliabilityCsvPath = EnsureCsvFileReady(m_reliabilityCsvPath, header, reliabilityLogPrefix);
+        File.AppendAllText(m_reliabilityCsvPath, row + System.Environment.NewLine);
+
+        LogReliability(
+            "end",
+            string.Format(
+                CultureInfo.InvariantCulture,
+                "agent={0} episode={1} reason={2} success={3} reward={4:F4} final_goal_error={5:F4}",
+                agentId,
+                m_episodeId,
+                m_episodeEndReason,
+                success ? 1 : 0,
+                m_episodeCumulativeReward,
+                m_finalBlockGoalDistance
+            )
+        );
+
+        LogReliability(
+            "export",
+            string.Format(
+                CultureInfo.InvariantCulture,
+                "agent={0} episode={1} recorded=true csv_path={2}",
+                agentId,
+                m_episodeId,
+                m_reliabilityCsvPath
+            )
+        );
+    }
+
+    void ExportControlQualitySummary(bool success)
+    {
+        if (!enableControlQualityLogs)
+        {
+            return;
+        }
+
+        var agentId = GetAgentId();
+        var trainingStep = GetTrainingStep();
+
+        if (m_controlSamples > 0)
+        {
+            m_goalVelocityMean = m_sumGoalVelocity / m_controlSamples;
+            m_goalVelocityVariance = (m_sumGoalVelocitySq / m_controlSamples) - (m_goalVelocityMean * m_goalVelocityMean);
+            m_goalVelocityAccelerationVariance = (m_sumGoalVelocityDeltaSq / m_controlSamples);
+            m_rotationVariance = (m_sumAngularSpeedSq / m_controlSamples) - Mathf.Pow(m_sumAngularSpeed / m_controlSamples, 2f);
+            m_policySmoothness = m_totalActionTransitions > 0 ? m_totalActionDelta / m_totalActionTransitions : 0f;
+
+            var entropy = 0f;
+            for (var i = 0; i < m_actionCounts.Length; i++)
+            {
+                if (m_actionCounts[i] <= 0)
+                {
+                    continue;
+                }
+
+                var p = (float)m_actionCounts[i] / m_controlSamples;
+                entropy -= p * Mathf.Log(p + 1e-8f);
+            }
+            m_actionEntropy = entropy;
+        }
+
+        m_repeatedActionRatio = m_controlSamples > 0 ? (float)m_sameActionSteps / m_controlSamples : 0f;
+
+        var row = string.Format(
+            CultureInfo.InvariantCulture,
+            "{0},{1},{2},{3},{4},{5:F4},{6:F4},{7:F4},{8:F4},{9:F4},{10:F4},{11:F4},{12:F4},{13:F4},{14:F4}",
+            agentId,
+            m_episodeId,
+            trainingStep,
+            success ? 1 : 0,
+            m_episodeEndReason,
+            m_goalVelocityMean,
+            m_goalVelocityVariance,
+            m_goalVelocityAccelerationVariance,
+            m_goalVelocityJerk / Mathf.Max(1, m_controlSamples),
+            m_rotationVariance,
+            m_actionEntropy,
+            m_repeatedActionRatio,
+            m_policySmoothness,
+            m_controlSamples,
+            m_sumAngularSpeed / Mathf.Max(1, m_controlSamples)
+        );
+
+        var header = "agent_id,episode_id,training_step,success,end_reason,mean_goal_velocity,goal_velocity_variance,goal_velocity_acceleration_variance,goal_velocity_jerk,rotation_variance,action_entropy,repeated_action_ratio,policy_smoothness,control_samples,mean_angular_speed";
+        m_controlQualityCsvPath = EnsureCsvFileReady(m_controlQualityCsvPath, header, controlQualityLogPrefix);
+        File.AppendAllText(m_controlQualityCsvPath, row + System.Environment.NewLine);
+
+        LogControlQuality(
+            "end",
+            string.Format(
+                CultureInfo.InvariantCulture,
+                "agent={0} episode={1} reason={2} mean_goal_velocity={3:F4} goal_velocity_variance={4:F4} action_entropy={5:F4} repeated_action_ratio={6:F4} policy_smoothness={7:F4}",
+                agentId,
+                m_episodeId,
+                m_episodeEndReason,
+                m_goalVelocityMean,
+                m_goalVelocityVariance,
+                m_actionEntropy,
+                m_repeatedActionRatio,
+                m_policySmoothness
+            )
+        );
+
+        LogControlQuality(
+            "export",
+            string.Format(
+                CultureInfo.InvariantCulture,
+                "agent={0} episode={1} recorded=true csv_path={2}",
+                agentId,
+                m_episodeId,
+                m_controlQualityCsvPath
+            )
+        );
+    }
+
+    void OnCollisionEnter(Collision collision)
+    {
+        if (collision.gameObject == block)
+        {
+            m_isTouchingBlock = true;
+            if (m_firstContactStep < 0)
+            {
+                m_firstContactStep = m_episodeSteps;
+            }
+        }
+    }
+
+    void OnCollisionStay(Collision collision)
+    {
+        if (collision.gameObject == block)
+        {
+            m_isTouchingBlock = true;
+        }
+    }
+
+    void OnCollisionExit(Collision collision)
+    {
+        if (collision.gameObject == block)
+        {
+            m_isTouchingBlock = false;
+        }
+    }
+
+    void ExportLearningImprovementSummary(bool success)
+    {
+        if (!enableLearningImprovementLogs)
+        {
+            return;
+        }
+
+        var agentId = GetAgentId();
+        var trainingStep = GetTrainingStep();
+        var finalGoalError = m_finalBlockGoalDistance;
+
+        var row = string.Format(
+            CultureInfo.InvariantCulture,
+            "{0},{1},{2},{3},{4},{5:F4},{6},{7},{8:F4},{9:F4},{10:F4},{11:F4},{12:F4},{13:F4},{14:F4},{15},{16:F4},{17:F4},{18:F4},{19:F4},{20:F4},{21:F4},{22:F4},{23:F4},{24:F4},{25:F4},{26:F4}",
+            agentId,
+            m_episodeId,
+            trainingStep,
+            success ? 1 : 0,
+            m_episodeEndReason,
+            m_episodeCumulativeReward,
+            m_episodeSteps,
+            success ? m_episodeSteps : -1,
+            m_startGoalZoneErrorXZ,
+            m_finalGoalZoneErrorXZ,
+            m_normalizedTaskProgress,
+            m_startBlockGoalDistance,
+            m_finalBlockGoalDistance,
+            m_normalizedBlockProgress,
+            m_successGoalConsistency,
+            finalGoalError,
+            m_finalCenterDistanceXZ,
+            m_finalCenterDistanceXYZ,
+            m_episodeStartBlockPos.x,
+            m_episodeStartBlockPos.y,
+            m_episodeStartBlockPos.z,
+            m_episodeEndBlockPos.x,
+            m_episodeEndBlockPos.y,
+            m_episodeEndBlockPos.z,
+            m_episodeGoalPos.x,
+            m_episodeGoalPos.y,
+            m_episodeGoalPos.z
+        );
+
+        var header = "agent_id,episode_id,training_step,success,end_reason,episode_reward,episode_length,time_to_goal,start_goal_zone_error_xz,final_goal_zone_error_xz,normalized_task_progress,start_block_goal_distance,final_block_goal_distance,normalized_block_progress,success_goal_consistency,final_goal_error,final_center_distance_xz,final_center_distance_xyz,start_block_x,start_block_y,start_block_z,end_block_x,end_block_y,end_block_z,goal_x,goal_y,goal_z";
+        m_learningImprovementCsvPath = EnsureCsvFileReady(m_learningImprovementCsvPath, header, learningImprovementLogPrefix);
+        File.AppendAllText(m_learningImprovementCsvPath, row + System.Environment.NewLine);
+
+        LogLearningImprovement(
+            "end",
+            string.Format(
+                CultureInfo.InvariantCulture,
+                "agent={0} episode={1} reason={2} steps={3} reward={4:F4} start_zone_error_xz={5:F4} final_zone_error_xz={6:F4} norm_task_progress={7:F4} legacy_final_dist={8:F4} legacy_norm_progress={9:F4}",
+                agentId,
+                m_episodeId,
+                m_episodeEndReason,
+                m_episodeSteps,
+                m_episodeCumulativeReward,
+                m_startGoalZoneErrorXZ,
+                m_finalGoalZoneErrorXZ,
+                m_normalizedTaskProgress,
+                m_finalBlockGoalDistance,
+                m_normalizedBlockProgress
+            )
+        );
+
+        LogLearningImprovement(
+            "export",
+            string.Format(
+                CultureInfo.InvariantCulture,
+                "agent={0} episode={1} recorded=true csv_path={2}",
+                agentId,
+                m_episodeId,
+                m_learningImprovementCsvPath
+            )
+        );
+    }
+
+    public void SetGroundMaterialFriction()
+    {
+        var groundCollider = ground.GetComponent<Collider>();
+
+        // Get defaults from PushBlockSettings (selected level), allow env params to override.
+        var defaultDynamic = m_PushBlockSettings != null ? m_PushBlockSettings.SelectedDynamicFriction : 0.5f;
+        var defaultStatic = m_PushBlockSettings != null ? m_PushBlockSettings.SelectedStaticFriction : 0.5f;
+
+        var dynamicF = m_ResetParams.GetWithDefault("dynamic_friction", defaultDynamic);
+        var statF = m_ResetParams.GetWithDefault("static_friction", defaultStatic);
+
+        // Avoid mutating shared PhysicMaterial assets: clone the existing material instance and assign it.
+        var oldMat = groundCollider.material;
+        if (oldMat != null)
+        {
+            var instMat = UnityEngine.Object.Instantiate(oldMat);
+            instMat.dynamicFriction = dynamicF;
+            instMat.staticFriction = statF;
+            groundCollider.material = instMat;
+        }
+        else
+        {
+            UnityEngine.Debug.LogWarning("PushAgentBasic: ground collider has no PhysicMaterial; skipping friction assignment.");
+        }
+        UnityEngine.Debug.Log($"PushAgentBasic: Applied ground friction dynamic={dynamicF}, static={statF}");
+    }
+
+    public void SetBlockProperties()
+    {
+        // Use PushBlockSettings selected defaults, but allow EnvironmentParameters to override.
+        var defaultScale = m_PushBlockSettings != null ? m_PushBlockSettings.SelectedBlockSize : 1.0f;
+        var defaultMass = m_PushBlockSettings != null ? m_PushBlockSettings.SelectedBlockMass : 1.0f;
+        var defaultDrag = m_PushBlockSettings != null ? m_PushBlockSettings.defaultBlockDrag : 0.5f;
+
+        var scale = m_ResetParams.GetWithDefault("block_scale", defaultScale);
+        // Set the scale of the block (keep consistent height)
+        m_BlockRb.transform.localScale = new Vector3(scale, 0.75f, scale);
+
+        // Set the mass (allow env override)
+        var mass = m_ResetParams.GetWithDefault("block_mass", defaultMass);
+        m_BlockRb.mass = mass;
+
+        // Set the drag of the block
+        m_BlockRb.linearDamping = m_ResetParams.GetWithDefault("block_drag", defaultDrag);
+
+        // Debug log applied values for verification
+        // Ensure physics tensors update after mass/scale changes
+        try
+        {
+            m_BlockRb.ResetInertiaTensor();
+        }
+        catch (System.Exception) { }
+
+        var blockCol = block.GetComponent<Collider>();
+        if (blockCol != null)
+        {
+            UnityEngine.Debug.Log($"PushAgentBasic: Applied block properties - mass={m_BlockRb.mass}, scale={m_BlockRb.transform.localScale.x}, linearDamping={m_BlockRb.linearDamping}, colliderBounds={blockCol.bounds}");
+        }
+        else
+        {
+            UnityEngine.Debug.Log($"PushAgentBasic: Applied block properties - mass={m_BlockRb.mass}, scale={m_BlockRb.transform.localScale.x}, linearDamping={m_BlockRb.linearDamping}, no collider found on block");
+        }
+    }
+
+    void SetResetParameters()
+    {
+        SetGroundMaterialFriction();
+        SetBlockProperties();
+    }
+}
