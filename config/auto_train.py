@@ -29,14 +29,15 @@ import time
 from pathlib import Path
 
 CONDA_EXE = r"C:\tools\Anaconda3\condabin\conda.bat"
-UNITY_EXE = r"C:\soqqle\ml-agents\config\PushBlockHeadless\UnityEnvironment.exe"
+DEFAULT_UNITY_EXE = r"C:\soqqle\ml-agents\config\PushBlockHeadless\UnityEnvironment.exe"
 EXPORT_SCRIPT = Path(r"C:\soqqle\ml-agents\config\export_tensor.py")
-RESULTS_BASE = Path(r"C:\soqqle\ml-agents\config\results")
+DEFAULT_RESULTS_BASE = Path(r"C:\soqqle\ml-agents\config\results")
+DEFAULT_BASE_PORT = 5005
 
 
-def setup_train_dirs(run_num: int, train_num: int):
+def setup_train_dirs(run_num: int, train_num: int, results_base: Path):
     """Create the full directory tree for a training run."""
-    run_dir = RESULTS_BASE / f"run_{run_num:02d}"
+    run_dir = results_base / f"run_{run_num:02d}"
     train_dir = run_dir / f"train_{train_num:02d}"
     subdirs = [
         train_dir / "_ml_temp",
@@ -137,11 +138,27 @@ def is_training_failed(line: str) -> bool:
     return any(re.search(pattern, line) for pattern in failure_signals)
 
 
-def run_training(yaml_config: str, run_num: int, train_num: int) -> int:
+def run_training(
+    yaml_config: str,
+    run_num: int,
+    train_num: int,
+    unity_exe: str,
+    results_base: Path,
+    base_port: int,
+    resume_train_dir: Path | None = None,
+) -> int:
     """Run mlagents-learn and return the process exit code."""
-    train_id = f"train_{train_num:02d}"
-    train_dir = setup_train_dirs(run_num, train_num)
-    ml_temp = train_dir / "_ml_temp"
+    if resume_train_dir:
+        train_dir = resume_train_dir
+        train_id = train_dir.name
+        ml_temp = train_dir / "_ml_temp"
+        if not ml_temp.exists():
+            print(f"[ERROR] _ml_temp not found in {train_dir}")
+            return 1
+    else:
+        train_id = f"train_{train_num:02d}"
+        train_dir = setup_train_dirs(run_num, train_num, results_base)
+        ml_temp = train_dir / "_ml_temp"
     log_file = train_dir / "train_log" / f"{train_id}.log"
     metric_li_dir = train_dir / "metric" / "learning improvement"
 
@@ -155,6 +172,7 @@ def run_training(yaml_config: str, run_num: int, train_num: int) -> int:
     metric_li_posix = metric_li_dir.as_posix()
     recordings_posix = (train_dir / "recordings").as_posix()
 
+    resume_flag = "--resume" if resume_train_dir else "--force"
     batch_content = (
         f'@echo off\n'
         f'set PYTHONUNBUFFERED=1\n'
@@ -163,7 +181,7 @@ def run_training(yaml_config: str, run_num: int, train_num: int) -> int:
         f'set PUSHBLOCK_METADATA_DIR={recordings_posix}\n'
         f'set PUSHBLOCK_RUN_ID={train_id}\n'
         f'call "{CONDA_EXE}" activate mlagents\n'
-        f'mlagents-learn "{yaml_config}" --run-id {train_id} --force --env "{UNITY_EXE}" --results-dir "{results_dir_posix}"\n'
+        f'mlagents-learn "{yaml_config}" --run-id {train_id} {resume_flag} --env "{unity_exe}" --results-dir "{results_dir_posix}" --base-port {base_port}\n'
     )
     batch_file = train_dir / "_run.bat"
     batch_file.write_text(batch_content)
@@ -175,6 +193,11 @@ def run_training(yaml_config: str, run_num: int, train_num: int) -> int:
     env['PUSHBLOCK_RUN_ID'] = train_id
     env['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'python'
 
+    if resume_train_dir and log_file.exists():
+        # 备份旧日志，避免之前的错误信息被误检
+        backup_log = log_file.with_suffix(".log.pre_resume")
+        shutil.move(str(log_file), str(backup_log))
+        print(f"[RESUME] Old log backed up to {backup_log.name}")
     process = subprocess.Popen(
         f'cmd /c "{batch_file}" > "{log_file}" 2>&1',
         shell=True,
@@ -221,10 +244,13 @@ def run_training(yaml_config: str, run_num: int, train_num: int) -> int:
     return process.returncode
 
 
-def post_training(run_num: int, train_num: int) -> bool:
+def post_training(run_num: int = 0, train_num: int = 0, results_base: Path | None = None, train_dir: Path | None = None) -> bool:
     """Export tensors from _ml_temp, copy CSVs, compute metrics."""
-    train_id = f"train_{train_num:02d}"
-    train_dir = RESULTS_BASE / f"run_{run_num:02d}" / train_id
+    if train_dir is None:
+        train_id = f"train_{train_num:02d}"
+        train_dir = results_base / f"run_{run_num:02d}" / train_id
+    else:
+        train_id = train_dir.name
     ml_temp = train_dir / "_ml_temp"
     tensor_dir = train_dir / "tensor"
 
@@ -341,12 +367,12 @@ def compress_training_screenshots_to_video(train_dir: Path, fps: int = 25, crf: 
     return True
 
 
-def find_next_run_number() -> int:
+def find_next_run_number(results_base: Path) -> int:
     """Scan results/ for existing run_XX dirs and return the next available number."""
-    if not RESULTS_BASE.exists():
+    if not results_base.exists():
         return 1
     existing = []
-    for entry in RESULTS_BASE.iterdir():
+    for entry in results_base.iterdir():
         if entry.is_dir() and entry.name.startswith("run_"):
             m = re.match(r"run_(\d+)$", entry.name)
             if m:
@@ -371,10 +397,109 @@ def main() -> int:
         default=0,
         help="Number of training runs to execute (0 = infinite until stopped)",
     )
+    parser.add_argument(
+        "--env",
+        default=DEFAULT_UNITY_EXE,
+        help="Path to UnityEnvironment.exe"
+    )
+    parser.add_argument(
+        "--results-base",
+        default=str(DEFAULT_RESULTS_BASE),
+        help="Base output directory"
+    )
+    parser.add_argument(
+        "--base-port",
+        type=int,
+        default=DEFAULT_BASE_PORT,
+        help="ML-Agents base port"
+    )
+    parser.add_argument(
+        "--resume-dir",
+        default=None,
+        help="Path to a run_XX directory containing existing train_XX folders to resume from"
+    )
+    parser.add_argument(
+        "--resume-from-train",
+        type=int,
+        default=1,
+        help="When using --resume-dir, start from this train number (1 = train_01)"
+    )
     args = parser.parse_args()
 
     yaml_config = args.config
-    run_num = args.run_id if args.run_id > 0 else find_next_run_number()
+    unity_exe = args.env
+    results_base = Path(args.results_base)
+    base_port = args.base_port
+
+    if args.resume_dir:
+        resume_dir = Path(args.resume_dir)
+        if not resume_dir.exists():
+            print(f"[ERROR] Resume directory not found: {resume_dir}")
+            return 1
+
+        start_train_num = args.resume_from_train
+        train_dirs = []
+        for entry in sorted(resume_dir.iterdir()):
+            if entry.is_dir() and re.match(r"train_\d+$", entry.name):
+                checkpoint = entry / "_ml_temp" / entry.name / "PushBlock" / "checkpoint.pt"
+                m = re.match(r"train_(\d+)$", entry.name)
+                train_idx = int(m.group(1)) if m else 999
+                if train_idx < start_train_num:
+                    continue
+                if checkpoint.exists():
+                    train_dirs.append(entry)
+                else:
+                    print(f"[WARN] No checkpoint found for {entry.name}, skipping")
+
+        if not train_dirs:
+            print("[ERROR] No valid training directories found to resume")
+            return 1
+
+        print(f"[RESUME] Found {len(train_dirs)} training(s) to resume in {resume_dir}")
+
+        completed = 0
+        for i, train_dir in enumerate(train_dirs):
+            print(f"\n[RESUME] Resuming {train_dir.name} ({i+1}/{len(train_dirs)})")
+            exit_code = run_training(
+                yaml_config,
+                0,  # run_num not used in resume mode
+                0,  # train_num not used
+                unity_exe,
+                results_base,
+                base_port,
+                resume_train_dir=train_dir,
+            )
+
+            if exit_code == -1:
+                print("[STOP] Training was interrupted, stopping resume")
+                break
+
+            if exit_code != 0:
+                print(f"[STOP] Training failed for {train_dir.name}, stopping resume")
+                break
+
+            # Post-training: export tensors and organize outputs
+            success = post_training(train_dir=train_dir)
+            if not success:
+                print(f"[WARN] Post-training organization failed for {train_dir.name}")
+
+            # Compress screenshots to MP4
+            video_ok = compress_training_screenshots_to_video(train_dir, fps=25, crf=28)
+            if not video_ok:
+                print(f"[WARN] Screenshot compression failed for {train_dir.name}, PNGs retained")
+
+            completed = i + 1
+
+            # Brief pause before next run
+            if completed < len(train_dirs):
+                print(f"\n[NEXT] Preparing next resume in 10 seconds...")
+                print("[NEXT] Make sure Unity is ready before the next run starts")
+                time.sleep(10)
+
+        print(f"\n[AUTO-RUN] Finished. Resumed {completed} run(s).")
+        return 0
+
+    run_num = args.run_id if args.run_id > 0 else find_next_run_number(results_base)
     train_num = 1  # Always start from train_01 within each run
     run_count = 0
     max_runs = args.runs
@@ -387,7 +512,14 @@ def main() -> int:
             break
 
         # Run training
-        exit_code = run_training(yaml_config, run_num, train_num)
+        exit_code = run_training(
+            yaml_config,
+            run_num,
+            train_num,
+            unity_exe,
+            results_base,
+            base_port,
+        )
 
         if exit_code == -1:
             print("[STOP] Training was interrupted, stopping auto-run")
@@ -399,14 +531,14 @@ def main() -> int:
             break
 
         # Post-training: export tensors and organize outputs
-        success = post_training(run_num, train_num)
+        success = post_training(run_num, train_num, results_base)
         if not success:
             train_id = f"train_{train_num:02d}"
             print(f"[WARN] Post-training organization failed for {train_id}")
 
         # Compress screenshots to MP4
         train_id = f"train_{train_num:02d}"
-        train_dir = RESULTS_BASE / f"run_{run_num:02d}" / train_id
+        train_dir = results_base / f"run_{run_num:02d}" / train_id
         video_ok = compress_training_screenshots_to_video(train_dir, fps=25, crf=28)
         if not video_ok:
             print(f"[WARN] Screenshot compression failed for {train_id}, PNGs retained")
