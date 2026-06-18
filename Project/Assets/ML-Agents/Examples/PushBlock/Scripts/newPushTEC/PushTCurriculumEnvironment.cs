@@ -65,13 +65,52 @@ namespace PushTEvolutionMvp
         {
             m_random = new System.Random();
 
+            // Capture the original block/ground parameters before any curriculum modifications,
+            // then build the Stage 1 fallback genome from those original values.
+            // Stage 1 should start with the default block size (1x1x1) and the scene's
+            // original mass, drag, and ground friction.
+            if (blockRigidbody == null)
+            {
+                Debug.LogWarning("[CurriculumEnv] blockRigidbody is not assigned; using default mass/drag for fallback genome.");
+            }
+            if (groundCollider == null || groundCollider.material == null)
+            {
+                Debug.LogWarning("[CurriculumEnv] groundCollider or its material is not assigned; using default friction for fallback genome.");
+            }
+
+            float originalMass = blockRigidbody != null ? blockRigidbody.mass : 1f;
+            float originalDrag = blockRigidbody != null ? blockRigidbody.linearDamping : 0.5f;
+            float originalFriction = 0.5f;
+            if (groundCollider != null && groundCollider.material != null)
+            {
+                originalFriction = groundCollider.material.dynamicFriction;
+            }
+
+            fallbackGenome = new PushTBlockGenome
+            {
+                width = 1.0f,
+                height = 1.0f,
+                depth = 1.0f,
+                mass = originalMass,
+                friction = originalFriction,
+                bounciness = 0f,
+                blockDrag = originalDrag
+            };
+
+            Debug.Log(
+                $"[CurriculumEnv] Initialized fallback genome from scene defaults: " +
+                $"w={fallbackGenome.width:F2} h={fallbackGenome.height:F2} d={fallbackGenome.depth:F2} " +
+                $"mass={fallbackGenome.mass:F2} friction={fallbackGenome.friction:F2} drag={fallbackGenome.blockDrag:F2} bounce={fallbackGenome.bounciness:F2}");
+
             // Determine JSON path (check multiple possible locations)
             string jsonPath = null;
+            // In the Editor/workflow scenario, prefer the project-side pool (written by
+            // PushTCurriculumEC) over any stale pool left behind by a previously built player.
             var candidatePaths = new string[]
             {
-                System.IO.Path.Combine(Application.persistentDataPath, "curriculum_outputs", "genome_pool_latest.json"),
                 System.IO.Path.Combine(Application.dataPath, "ML-Agents", "Examples", "PushBlock", "Scripts", "newPushTEC", "curriculum_outputs", "genome_pool_latest.json"),
                 System.IO.Path.Combine(Application.dataPath, "..", "curriculum_outputs", "genome_pool_latest.json"),
+                System.IO.Path.Combine(Application.persistentDataPath, "curriculum_outputs", "genome_pool_latest.json"),
             };
             
             foreach (var candidate in candidatePaths)
@@ -90,15 +129,19 @@ namespace PushTEvolutionMvp
                 Debug.Log("[CurriculumEnv] genomePool reference was null, created runtime instance.");
             }
 
-            // Try to load from JSON if pool is empty (or was just created)
-            if (genomePool.IsEmpty && !string.IsNullOrEmpty(jsonPath))
+            // Always load the latest evolved pool from JSON if it exists. This ensures
+            // each curriculum stage trains on the most recent pool produced by EC,
+            // regardless of what is baked into the scene's GenomePool asset.
+            if (!string.IsNullOrEmpty(jsonPath))
             {
-                Debug.Log($"[CurriculumEnv] GenomePool empty, loading from JSON: {jsonPath}");
+                Debug.Log($"[CurriculumEnv] Loading latest pool from JSON: {jsonPath}");
                 genomePool.LoadFromJson(jsonPath);
-                
+
+                Debug.Log($"[Curriculum Training] Loaded pool path={jsonPath}, count={genomePool.Count}, generationId={genomePool.generationId}");
+
                 if (!genomePool.IsEmpty)
                 {
-                    Debug.Log($"[CurriculumEnv] Successfully loaded {genomePool.Count} genomes from JSON.");
+                    Debug.Log($"[CurriculumEnv] Successfully loaded {genomePool.Count} genomes from JSON (generation {genomePool.generationId}).");
                 }
                 else
                 {
@@ -178,6 +221,8 @@ namespace PushTEvolutionMvp
         public void ApplyRandomGenomeFromPool()
         {
             PushTBlockGenome genome = null;
+            int index = -1;
+            bool usedFallback = false;
 
             Debug.Log($"[CurriculumEnv-DIAG] genomePool is {(genomePool == null ? "NULL" : $"NOT NULL (count={genomePool.Count})")}, IsEmpty={genomePool?.IsEmpty}");
 
@@ -195,13 +240,38 @@ namespace PushTEvolutionMvp
                     effectiveFallbackRatio = 0f;
                 }
 
-                genome = genomePool.SampleWithFallback(m_random, fallbackGenome, effectiveFallbackRatio);
-                Debug.Log($"[CurriculumEnv-DIAG] Sampled from pool. Genome w={genome?.width:F2}");
+                bool useFallback = fallbackGenome != null && m_random.NextDouble() < Mathf.Clamp01(effectiveFallbackRatio);
+                if (useFallback)
+                {
+                    genome = fallbackGenome.Clone();
+                    usedFallback = true;
+                }
+                else
+                {
+                    genome = genomePool.SampleRandom(m_random, out index);
+                }
             }
             else
             {
                 genome = fallbackGenome?.Clone() ?? new PushTBlockGenome();
+                usedFallback = true;
                 Debug.LogWarning($"[CurriculumEnv-DIAG] Using fallback/default! Pool null={genomePool == null}, empty={genomePool?.IsEmpty}");
+            }
+
+            int generationId = genomePool != null ? genomePool.generationId : 0;
+            if (usedFallback)
+            {
+                Debug.Log(
+                    $"[Curriculum Training] Applying fallback genome generation={generationId}, index=-1, " +
+                    $"width={genome.width:F2}, height={genome.height:F2}, depth={genome.depth:F2}, " +
+                    $"mass={genome.mass:F2}, friction={genome.friction:F2}, drag={genome.blockDrag:F2}, bounce={genome.bounciness:F2}");
+            }
+            else
+            {
+                Debug.Log(
+                    $"[Curriculum Training] Applying genome generation={generationId}, index={index}, " +
+                    $"width={genome.width:F2}, height={genome.height:F2}, depth={genome.depth:F2}, " +
+                    $"mass={genome.mass:F2}, friction={genome.friction:F2}, drag={genome.blockDrag:F2}, bounce={genome.bounciness:F2}");
             }
 
             ApplyGenome(genome);

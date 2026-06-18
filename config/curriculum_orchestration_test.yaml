@@ -1,0 +1,49 @@
+# PushT / PushBlock Curriculum Orchestration V3.2 — TEST CONFIG
+#
+# Usage:
+#   python tools/curriculum_orchestrator.py config/curriculum_orchestration_test.yaml
+#
+# This config uses PushBlock_test.yaml with max_steps: 10000 for quick validation.
+# It is intentionally small so the full train -> checkpoint -> EC loop finishes fast.
+
+project_root: "."
+behavior_name: "PushBlock"
+results_dir: "results"
+
+mlagents_learn: null
+base_port: 5005
+
+# Overwrite existing run-id folders so the orchestration loop can be re-run.
+# Set to false if you want to manually resume a previous run instead.
+force: true
+
+# Archive any pre-existing genome_pool_latest.json before stage 1 so the first
+# stage trains on the fallback/easy genome rather than a stale evolved pool.
+start_fresh: true
+
+# Delete ec_request.json after a stage succeeds, preventing the watcher from
+# re-processing a stale request on the next Play Mode transition.
+clear_request_after_done: true
+
+# Very short delay because test training is fast.
+post_checkpoint_delay: 3.0
+
+ec_poll_interval: 2.0
+ec_timeout_seconds: 1800.0
+
+training_timeout_seconds: null
+
+stages:
+  - stage: 1
+    run_id: "pushblock_curriculum_test_s1"
+    config_path: "config/ppo/PushBlock_test.yaml"
+    expected_behavior_name: "PushBlock"
+
+  - stage: 2
+    run_id: "pushblock_curriculum_test_s2"
+    config_path: "config/ppo/PushBlock_test.yaml"
+    expected_behavior_name: "PushBlock"
+    # Warm-start stage 2 from the previous stage's checkpoint.
+    # This keeps the policy learned on the easy/fallback genome and finetunes
+    # on the harder EC-selected genomes instead of restarting from scratch.
+    initialize_from: "pushblock_curriculum_test_s1"

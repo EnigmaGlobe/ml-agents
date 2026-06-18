@@ -51,13 +51,14 @@ namespace PushTEvolutionMvp
         private void ExportSummaryCsv(string path)
         {
             var lines = new List<string>();
-            lines.Add("generation,genome_index,fitness,success_rate,mean_progress,iqm_progress,sd_progress,iqr_progress,difficulty,time_score,invalid_penalty,goal_error_score,sd_goal_error,width,height,depth,mass,block_drag,friction,bounciness");
+            lines.Add("generation,genome_index,fitness,success_rate,mean_progress,iqm_progress,sd_progress,iqr_progress,difficulty,time_score,invalid_penalty,goal_error_score,sd_goal_error,m4_block_net_displacement,m4_agent_net_displacement,m4_block_radial_spread,m4_agent_radial_spread,m4_task_centroid_centrality,m4_scene_centroid_centrality,learnability_score,challenge_score,spatial_behavior_score,novelty_score,width,height,depth,mass,block_drag,friction,bounciness");
 
             foreach (var eval in this.lastRun.bestPerGeneration)
             {
                 var g = eval.genome;
+                var m4 = eval.spatialProfile ?? new PushTSpatialBehaviorProfile();
                 lines.Add(
-                    $"{eval.generationIndex},{eval.genomeIndex},{eval.fitness:F6},{eval.successRate:F6},{eval.meanProgress:F6},{eval.iqmProgress:F6},{eval.sdProgress:F6},{eval.iqrProgress:F6},{eval.difficulty:F6},{eval.timeScore:F6},{eval.invalidPenalty:F6},{eval.goalErrorScore:F6},{eval.sdGoalError:F6},{g.width:F4},{g.height:F4},{g.depth:F4},{g.mass:F4},{g.blockDrag:F4},{g.friction:F4},{g.bounciness:F4}");
+                    $"{eval.generationIndex},{eval.genomeIndex},{eval.fitness:F6},{eval.successRate:F6},{eval.meanProgress:F6},{eval.iqmProgress:F6},{eval.sdProgress:F6},{eval.iqrProgress:F6},{eval.difficulty:F6},{eval.timeScore:F6},{eval.invalidPenalty:F6},{eval.goalErrorScore:F6},{eval.sdGoalError:F6},{m4.meanBlockNetDisplacement:F6},{m4.meanAgentNetDisplacement:F6},{m4.meanBlockRadialSpread:F6},{m4.meanAgentRadialSpread:F6},{m4.meanTaskCentroidCentrality:F6},{m4.meanSceneCentroidCentrality:F6},{eval.learnabilityScore:F6},{eval.challengeScore:F6},{eval.spatialBehaviorScore:F6},{eval.noveltyScore:F6},{g.width:F4},{g.height:F4},{g.depth:F4},{g.mass:F4},{g.blockDrag:F4},{g.friction:F4},{g.bounciness:F4}");
             }
 
             File.WriteAllLines(path, lines);
@@ -67,13 +68,16 @@ namespace PushTEvolutionMvp
         private void ExportAllEvaluationsCsv(string path)
         {
             var lines = new List<string>();
-            lines.Add("generation,genome_index,fitness,success_rate,mean_progress,iqm_progress,sd_progress,iqr_progress,cv_progress,mean_goal_error,sd_goal_error,mean_time_to_goal,mean_reward,difficulty,time_score,goal_error_score,invalid_penalty,block_scale,block_mass,block_drag,friction,width,height,depth,mass,bounciness");
+            lines.Add("eval_id,generation,genome_index,fitness,success_rate,mean_progress,iqm_progress,sd_progress,iqr_progress,cv_progress,mean_goal_error,sd_goal_error,mean_time_to_goal,mean_reward,difficulty,time_score,goal_error_score,invalid_penalty,m4_block_net_displacement,m4_agent_net_displacement,m4_block_radial_spread,m4_agent_radial_spread,m4_task_centroid_centrality,m4_scene_centroid_centrality,learnability_score,challenge_score,spatial_behavior_score,novelty_score,block_scale,block_mass,block_drag,friction,width,height,depth,mass,bounciness");
 
+            int evalId = 0;
             foreach (var eval in this.lastRun.allEvaluations)
             {
+                evalId++;
                 var g = eval.genome;
+                var m4 = eval.spatialProfile ?? new PushTSpatialBehaviorProfile();
                 lines.Add(
-                    $"{eval.generationIndex},{eval.genomeIndex},{eval.fitness:F6},{eval.successRate:F6},{eval.meanProgress:F6},{eval.iqmProgress:F6},{eval.sdProgress:F6},{eval.iqrProgress:F6},{eval.cvProgress:F6},{eval.meanGoalError:F6},{eval.sdGoalError:F6},{eval.meanTimeToGoal:F6},{eval.meanReward:F6},{eval.difficulty:F6},{eval.timeScore:F6},{eval.goalErrorScore:F6},{eval.invalidPenalty:F6},{g.blockScale:F4},{g.blockMass:F4},{g.blockDrag:F4},{g.friction:F4},{g.width:F4},{g.height:F4},{g.depth:F4},{g.mass:F4},{g.bounciness:F4}");
+                    $"{evalId},{eval.generationIndex},{eval.genomeIndex},{eval.fitness:F6},{eval.successRate:F6},{eval.meanProgress:F6},{eval.iqmProgress:F6},{eval.sdProgress:F6},{eval.iqrProgress:F6},{eval.cvProgress:F6},{eval.meanGoalError:F6},{eval.sdGoalError:F6},{eval.meanTimeToGoal:F6},{eval.meanReward:F6},{eval.difficulty:F6},{eval.timeScore:F6},{eval.goalErrorScore:F6},{eval.invalidPenalty:F6},{m4.meanBlockNetDisplacement:F6},{m4.meanAgentNetDisplacement:F6},{m4.meanBlockRadialSpread:F6},{m4.meanAgentRadialSpread:F6},{m4.meanTaskCentroidCentrality:F6},{m4.meanSceneCentroidCentrality:F6},{eval.learnabilityScore:F6},{eval.challengeScore:F6},{eval.spatialBehaviorScore:F6},{eval.noveltyScore:F6},{g.blockScale:F4},{g.blockMass:F4},{g.blockDrag:F4},{g.friction:F4},{g.width:F4},{g.height:F4},{g.depth:F4},{g.mass:F4},{g.bounciness:F4}");
             }
 
             File.WriteAllLines(path, lines);
@@ -83,14 +87,16 @@ namespace PushTEvolutionMvp
         private void ExportEpisodesCsv(string path)
         {
             var lines = new List<string>();
-            lines.Add("generation,genome_index,episode_index,episode_seed,success,reward,progress,final_goal_error,time_to_goal,timed_out,invalid_physics");
+            lines.Add("eval_id,generation,genome_index,episode_index,episode_seed,success,reward,progress,final_goal_error,time_to_goal,timed_out,invalid_physics,block_net_displacement,agent_net_displacement,block_radial_spread,agent_radial_spread,task_centroid_centrality,scene_centroid_centrality");
 
+            int evalId = 0;
             foreach (var eval in this.lastRun.allEvaluations)
             {
+                evalId++;
                 foreach (var ep in eval.episodes)
                 {
                     lines.Add(
-                        $"{eval.generationIndex},{eval.genomeIndex},{ep.episodeIndex},{ep.episodeSeed},{(ep.success ? 1 : 0)},{ep.reward:F6},{ep.progress:F6},{ep.finalGoalError:F6},{ep.timeToGoal:F6},{(ep.timedOut ? 1 : 0)},{(ep.invalidPhysics ? 1 : 0)}");
+                        $"{evalId},{eval.generationIndex},{eval.genomeIndex},{ep.episodeIndex},{ep.episodeSeed},{(ep.success ? 1 : 0)},{ep.reward:F6},{ep.progress:F6},{ep.finalGoalError:F6},{ep.timeToGoal:F6},{(ep.timedOut ? 1 : 0)},{(ep.invalidPhysics ? 1 : 0)},{ep.blockNetDisplacement:F6},{ep.agentNetDisplacement:F6},{ep.blockRadialSpread:F6},{ep.agentRadialSpread:F6},{ep.taskCentroidCentrality:F6},{ep.sceneCentroidCentrality:F6}");
                 }
             }
 

@@ -1,0 +1,53 @@
+# PushT / PushBlock Curriculum Orchestration V3.2 Config
+#
+# Usage:
+#   python tools/curriculum_orchestrator.py config/curriculum_orchestration.yaml
+#
+# This config drives a full multi-stage curriculum loop:
+#   1. Train with mlagents-learn.
+#   2. Copy the resulting .onnx checkpoint into Unity.
+#   3. Trigger Curriculum EC via ec_request.json.
+#   4. Wait for ec_done.json.
+#   5. Proceed to the next stage.
+
+# Project layout (paths are relative to the directory from which you run the script)
+project_root: "."
+behavior_name: "PushBlock"
+results_dir: "results"
+
+# Optional: full path to mlagents-learn if it is not on PATH.
+# mlagents_learn: "C:/Users/user/.venv/Scripts/mlagents-learn"
+mlagents_learn: null
+
+# Default mlagents-learn base port. Can be overridden per stage.
+base_port: 5005
+
+# Time to wait after copying the checkpoint before triggering EC.
+# This gives Unity's V2 loader time to import the new ONNX.
+post_checkpoint_delay: 5.0
+
+# EC polling settings
+ec_poll_interval: 2.0
+# EC can take a long time (many generations * episodes). 30 minutes is a reasonable default.
+ec_timeout_seconds: 1800.0
+
+# Training process timeout (seconds). Null means no timeout.
+training_timeout_seconds: null
+
+# Stage definitions
+stages:
+  - stage: 1
+    run_id: "pushblock_curriculum_news1"
+    config_path: "config/ppo/PushBlock.yaml"
+    expected_behavior_name: "PushBlock"
+    # Optional: if you use a built executable instead of the Unity Editor.
+    # env_path: "builds/PushBlock/PushBlock.exe"
+    # base_port: 5005
+    # timeout_seconds: 3600
+
+  - stage: 2
+    run_id: "pushblock_curriculum_news2"
+    config_path: "config/ppo/PushBlock.yaml"
+    expected_behavior_name: "PushBlock"
+    # Continue training from the previous stage's weights.
+    initialize_from: "pushblock_curriculum_s1"

@@ -158,6 +158,8 @@ namespace PushTEvolutionMvp
                 result.success = false;
                 result.errorMessage = $"Exception during Curriculum EC: {ex.Message}";
                 Debug.LogError("[Curriculum EC] " + result.errorMessage);
+                Debug.LogException(ex);
+                WriteExceptionToFile(ex);
             }
             finally
             {
@@ -259,6 +261,23 @@ namespace PushTEvolutionMvp
             }
 
             return allGood;
+        }
+
+        static void WriteExceptionToFile(Exception ex)
+        {
+            try
+            {
+                string logDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Logs"));
+                Directory.CreateDirectory(logDir);
+                string logPath = Path.Combine(logDir, "curriculum_ec_errors.txt");
+                string content = $"===== {DateTime.UtcNow:O} =====\n{ex}\n\n";
+                File.AppendAllText(logPath, content);
+                Debug.Log($"[Curriculum EC] Full exception written to: {logPath}");
+            }
+            catch
+            {
+                // Best effort.
+            }
         }
 
         /// <summary>
@@ -375,16 +394,28 @@ namespace PushTEvolutionMvp
 
                 if (selected.Count == 0)
                 {
+                    // First genome is maximally novel by definition.
+                    candidate.noveltyScore = 1f;
                     selected.Add(candidate);
                     continue;
                 }
 
                 float minDist = float.MaxValue;
+                float minM4Dist = float.MaxValue;
                 foreach (var existing in selected)
                 {
-                    float d = NormalizedGenomeDistance(candidate.genome, existing.genome);
+                    float d = config != null && config.useM4Diversity
+                        ? CombinedDistance(candidate, existing)
+                        : NormalizedGenomeDistance(candidate.genome, existing.genome);
                     if (d < minDist) minDist = d;
+
+                    float m4d = M4ProfileDistance(candidate.spatialProfile, existing.spatialProfile);
+                    if (m4d < minM4Dist) minM4Dist = m4d;
                 }
+
+                // Novelty score for diagnostics: distance to closest selected genome in M4 space.
+                // Higher = more behaviorally novel relative to the selected pool.
+                candidate.noveltyScore = Mathf.Clamp01(minM4Dist);
 
                 if (minDist >= minGenomeDistance)
                 {
@@ -392,15 +423,24 @@ namespace PushTEvolutionMvp
                 }
             }
 
-            Debug.Log(
-                $"[Curriculum EC] Goldilocks: {candidates.Count} passed filters, " +
-                $"{selected.Count} selected after diversity filter (target max={maxPoolSize}).");
+            if (config != null && config.useM4Diversity)
+            {
+                Debug.Log(
+                    $"[Curriculum EC] Goldilocks: {candidates.Count} passed filters, " +
+                    $"{selected.Count} selected after hybrid (param+M4) diversity filter (target max={maxPoolSize}).");
+            }
+            else
+            {
+                Debug.Log(
+                    $"[Curriculum EC] Goldilocks: {candidates.Count} passed filters, " +
+                    $"{selected.Count} selected after parameter-only diversity filter (target max={maxPoolSize}).");
+            }
 
             return selected;
         }
 
         /// <summary>
-        /// Normalized Euclidean distance between two genomes in [0,1] feature space.
+        /// Normalized Euclidean distance between two genomes in [0,1] parameter space.
         /// </summary>
         float NormalizedGenomeDistance(PushTBlockGenome a, PushTBlockGenome b)
         {
@@ -424,6 +464,46 @@ namespace PushTEvolutionMvp
 
             float sq = dw * dw + dh * dh + dd * dd + dm * dm + df * df + ddg * ddg + db * db;
             return Mathf.Sqrt(sq / 7f);
+        }
+
+        /// <summary>
+        /// Euclidean distance between two M4 spatial profiles in normalized behavior space.
+        /// </summary>
+        float M4ProfileDistance(PushTSpatialBehaviorProfile a, PushTSpatialBehaviorProfile b)
+        {
+            if (a == null || b == null) return 1f;
+            if (config == null) return 0f;
+
+            float scaleNet = Mathf.Max(config.scaleBlockNetDisplacement, 0.0001f);
+            float scaleSpread = Mathf.Max(config.scaleBlockRadialSpread, 0.0001f);
+            float scaleCent = Mathf.Max(config.scaleTaskCentroidCentrality, 0.0001f);
+
+            float dNet   = Mathf.Abs(a.meanBlockNetDisplacement - b.meanBlockNetDisplacement) / scaleNet;
+            float dSpread = Mathf.Abs(a.meanBlockRadialSpread - b.meanBlockRadialSpread) / scaleSpread;
+            float dCent  = Mathf.Abs(a.meanTaskCentroidCentrality - b.meanTaskCentroidCentrality) / scaleCent;
+
+            float sq = dNet * dNet + dSpread * dSpread + dCent * dCent;
+            return Mathf.Sqrt(sq / 3f);
+        }
+
+        /// <summary>
+        /// Hybrid distance combining parameter distance and M4 behavioral distance.
+        /// Controlled by PushTEvolutionConfig.paramDistanceWeight and behaviorDistanceWeight.
+        /// </summary>
+        float CombinedDistance(PushTGenomeEvaluation a, PushTGenomeEvaluation b)
+        {
+            if (a == null || b == null) return 1f;
+            if (config == null) return 0f;
+
+            float paramDist = NormalizedGenomeDistance(a.genome, b.genome);
+            float behaviorDist = M4ProfileDistance(a.spatialProfile, b.spatialProfile);
+
+            float wParam = Mathf.Clamp01(config.paramDistanceWeight);
+            float wBehavior = Mathf.Clamp01(config.behaviorDistanceWeight);
+            float sum = wParam + wBehavior;
+            if (sum < 0.0001f) return paramDist;
+
+            return (wParam * paramDist + wBehavior * behaviorDist) / sum;
         }
 
         float Normalize(float value, float min, float max)
@@ -492,6 +572,13 @@ namespace PushTEvolutionMvp
                     var jsonPath = Path.Combine(CurriculumOutputDir, $"genome_pool_{stage}_{timestamp}.json");
                     outputPool.SaveToJson(jsonPath);
                     result.poolPath = jsonPath;
+
+                    // Also write to genome_pool_latest.json so the next training stage
+                    // (which loads from that path in PushTCurriculumEnvironment.Awake)
+                    // automatically uses the most recently evolved pool.
+                    var latestPath = Path.Combine(CurriculumOutputDir, "genome_pool_latest.json");
+                    outputPool.SaveToJson(latestPath);
+                    Debug.Log($"[Curriculum EC] Updated genome_pool_latest.json with {outputPool.Count} genomes (generation {outputPool.generationId}).");
                 }
                 catch (Exception ex)
                 {
@@ -525,13 +612,16 @@ namespace PushTEvolutionMvp
         void ExportSummaryCsv(string path, List<PushTGenomeEvaluation> selected)
         {
             var lines = new List<string>();
-            lines.Add("generation,genome_index,fitness,success_rate,mean_progress,iqm_progress,sd_progress,iqr_progress,difficulty,time_score,invalid_penalty,goal_error_score,sd_goal_error,width,height,depth,mass,block_drag,friction,bounciness,selected");
+            lines.Add("selected_rank,generation,genome_index,fitness,success_rate,mean_progress,iqm_progress,sd_progress,iqr_progress,difficulty,time_score,invalid_penalty,goal_error_score,sd_goal_error,m4_block_net_displacement,m4_agent_net_displacement,m4_block_radial_spread,m4_agent_radial_spread,m4_task_centroid_centrality,m4_scene_centroid_centrality,learnability_score,challenge_score,spatial_behavior_score,novelty_score,width,height,depth,mass,block_drag,friction,bounciness,selected");
 
+            int selectedRank = 0;
             foreach (var eval in selected)
             {
+                selectedRank++;
                 var g = eval.genome;
+                var m4 = eval.spatialProfile ?? new PushTSpatialBehaviorProfile();
                 lines.Add(
-                    $"{eval.generationIndex},{eval.genomeIndex},{eval.fitness:F6},{eval.successRate:F6},{eval.meanProgress:F6},{eval.iqmProgress:F6},{eval.sdProgress:F6},{eval.iqrProgress:F6},{eval.difficulty:F6},{eval.timeScore:F6},{eval.invalidPenalty:F6},{eval.goalErrorScore:F6},{eval.sdGoalError:F6},{g.width:F4},{g.height:F4},{g.depth:F4},{g.mass:F4},{g.blockDrag:F4},{g.friction:F4},{g.bounciness:F4},1");
+                    $"{selectedRank},{eval.generationIndex},{eval.genomeIndex},{eval.fitness:F6},{eval.successRate:F6},{eval.meanProgress:F6},{eval.iqmProgress:F6},{eval.sdProgress:F6},{eval.iqrProgress:F6},{eval.difficulty:F6},{eval.timeScore:F6},{eval.invalidPenalty:F6},{eval.goalErrorScore:F6},{eval.sdGoalError:F6},{m4.meanBlockNetDisplacement:F6},{m4.meanAgentNetDisplacement:F6},{m4.meanBlockRadialSpread:F6},{m4.meanAgentRadialSpread:F6},{m4.meanTaskCentroidCentrality:F6},{m4.meanSceneCentroidCentrality:F6},{eval.learnabilityScore:F6},{eval.challengeScore:F6},{eval.spatialBehaviorScore:F6},{eval.noveltyScore:F6},{g.width:F4},{g.height:F4},{g.depth:F4},{g.mass:F4},{g.blockDrag:F4},{g.friction:F4},{g.bounciness:F4},1");
             }
 
             File.WriteAllLines(path, lines);
@@ -541,13 +631,16 @@ namespace PushTEvolutionMvp
         void ExportAllEvaluationsCsv(string path, List<PushTGenomeEvaluation> allEvals)
         {
             var lines = new List<string>();
-            lines.Add("generation,genome_index,fitness,success_rate,mean_progress,iqm_progress,sd_progress,iqr_progress,cv_progress,mean_goal_error,sd_goal_error,mean_time_to_goal,mean_reward,difficulty,time_score,goal_error_score,invalid_penalty,block_scale,block_mass,block_drag,friction,width,height,depth,mass,bounciness");
+            lines.Add("eval_id,generation,genome_index,fitness,success_rate,mean_progress,iqm_progress,sd_progress,iqr_progress,cv_progress,mean_goal_error,sd_goal_error,mean_time_to_goal,mean_reward,difficulty,time_score,goal_error_score,invalid_penalty,m4_block_net_displacement,m4_agent_net_displacement,m4_block_radial_spread,m4_agent_radial_spread,m4_task_centroid_centrality,m4_scene_centroid_centrality,learnability_score,challenge_score,spatial_behavior_score,novelty_score,block_scale,block_mass,block_drag,friction,width,height,depth,mass,bounciness");
 
+            int evalId = 0;
             foreach (var eval in allEvals)
             {
+                evalId++;
                 var g = eval.genome;
+                var m4 = eval.spatialProfile ?? new PushTSpatialBehaviorProfile();
                 lines.Add(
-                    $"{eval.generationIndex},{eval.genomeIndex},{eval.fitness:F6},{eval.successRate:F6},{eval.meanProgress:F6},{eval.iqmProgress:F6},{eval.sdProgress:F6},{eval.iqrProgress:F6},{eval.cvProgress:F6},{eval.meanGoalError:F6},{eval.sdGoalError:F6},{eval.meanTimeToGoal:F6},{eval.meanReward:F6},{eval.difficulty:F6},{eval.timeScore:F6},{eval.goalErrorScore:F6},{eval.invalidPenalty:F6},{g.blockScale:F4},{g.blockMass:F4},{g.blockDrag:F4},{g.friction:F4},{g.width:F4},{g.height:F4},{g.depth:F4},{g.mass:F4},{g.bounciness:F4}");
+                    $"{evalId},{eval.generationIndex},{eval.genomeIndex},{eval.fitness:F6},{eval.successRate:F6},{eval.meanProgress:F6},{eval.iqmProgress:F6},{eval.sdProgress:F6},{eval.iqrProgress:F6},{eval.cvProgress:F6},{eval.meanGoalError:F6},{eval.sdGoalError:F6},{eval.meanTimeToGoal:F6},{eval.meanReward:F6},{eval.difficulty:F6},{eval.timeScore:F6},{eval.goalErrorScore:F6},{eval.invalidPenalty:F6},{m4.meanBlockNetDisplacement:F6},{m4.meanAgentNetDisplacement:F6},{m4.meanBlockRadialSpread:F6},{m4.meanAgentRadialSpread:F6},{m4.meanTaskCentroidCentrality:F6},{m4.meanSceneCentroidCentrality:F6},{eval.learnabilityScore:F6},{eval.challengeScore:F6},{eval.spatialBehaviorScore:F6},{eval.noveltyScore:F6},{g.blockScale:F4},{g.blockMass:F4},{g.blockDrag:F4},{g.friction:F4},{g.width:F4},{g.height:F4},{g.depth:F4},{g.mass:F4},{g.bounciness:F4}");
             }
 
             File.WriteAllLines(path, lines);
@@ -557,14 +650,16 @@ namespace PushTEvolutionMvp
         void ExportEpisodesCsv(string path, List<PushTGenomeEvaluation> allEvals)
         {
             var lines = new List<string>();
-            lines.Add("generation,genome_index,episode_index,episode_seed,success,reward,progress,final_goal_error,time_to_goal,timed_out,invalid_physics");
+            lines.Add("eval_id,generation,genome_index,episode_index,episode_seed,success,reward,progress,final_goal_error,time_to_goal,timed_out,invalid_physics,block_net_displacement,agent_net_displacement,block_radial_spread,agent_radial_spread,task_centroid_centrality,scene_centroid_centrality");
 
+            int evalId = 0;
             foreach (var eval in allEvals)
             {
+                evalId++;
                 foreach (var ep in eval.episodes)
                 {
                     lines.Add(
-                        $"{eval.generationIndex},{eval.genomeIndex},{ep.episodeIndex},{ep.episodeSeed},{(ep.success ? 1 : 0)},{ep.reward:F6},{ep.progress:F6},{ep.finalGoalError:F6},{ep.timeToGoal:F6},{(ep.timedOut ? 1 : 0)},{(ep.invalidPhysics ? 1 : 0)}");
+                        $"{evalId},{eval.generationIndex},{eval.genomeIndex},{ep.episodeIndex},{ep.episodeSeed},{(ep.success ? 1 : 0)},{ep.reward:F6},{ep.progress:F6},{ep.finalGoalError:F6},{ep.timeToGoal:F6},{(ep.timedOut ? 1 : 0)},{(ep.invalidPhysics ? 1 : 0)},{ep.blockNetDisplacement:F6},{ep.agentNetDisplacement:F6},{ep.blockRadialSpread:F6},{ep.agentRadialSpread:F6},{ep.taskCentroidCentrality:F6},{ep.sceneCentroidCentrality:F6}");
                 }
             }
 

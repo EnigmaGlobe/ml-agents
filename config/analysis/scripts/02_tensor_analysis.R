@@ -42,7 +42,7 @@ TENSOR_TAGS <- c(
 # ---------------------------------------------------------------------------
 discover_trains <- function(rdir) {
   dirs <- list.dirs(rdir, recursive = FALSE, full.names = TRUE)
-  trains <- dirs[basename(dirs) %>% str_detect("^train\\d+")]
+  trains <- dirs[basename(dirs) %>% str_detect("^train[_]?\\d+")]
   tibble(train_id = basename(trains), train_path = trains) %>% arrange(train_id)
 }
 

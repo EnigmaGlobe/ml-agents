@@ -22,8 +22,8 @@ namespace PushTEvolutionMvp.CheckpointSwap
         public PushAgentBasic frozenAgent;
 
         [Header("Paths")]
-        [Tooltip("Asset-relative path to the manifest file.")]
-        public string manifestPath = "Assets/Models/FrozenEvaluator/checkpoint_ready.json";
+        [Tooltip("Project-relative path to the manifest file. Kept outside Assets to avoid .meta files.")]
+        public string manifestPath = "Temp/FrozenEvaluator/checkpoint_ready.json";
 
         [Tooltip("Fallback asset-relative ONNX path if manifest cannot be read.")]
         public string fallbackOnnxAssetPath = "Assets/Models/FrozenEvaluator/FrozenEvaluator_latest.onnx";

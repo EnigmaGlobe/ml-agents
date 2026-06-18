@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace PushTEvolutionMvp
 {
@@ -16,6 +17,20 @@ namespace PushTEvolutionMvp
         public bool timedOut;
         public bool invalidPhysics;
         public string notes = "";
+
+        // Spatial trajectory samples (sampled per decision step or fixed interval)
+        public List<Vector3> agentPositions = new List<Vector3>();
+        public List<Vector3> blockPositions = new List<Vector3>();
+        public Vector3 goalPosition;
+        public Vector3 sceneCenter;
+
+        // M4-derived per-episode metrics
+        public float blockNetDisplacement;
+        public float agentNetDisplacement;
+        public float blockRadialSpread;
+        public float agentRadialSpread;
+        public float taskCentroidCentrality;
+        public float sceneCentroidCentrality;
     }
 
     [Serializable]
@@ -43,6 +58,15 @@ namespace PushTEvolutionMvp
         public float goalErrorScore;
         public float timeScore;
         public float fitness;
+
+        // M4 spatial behavior profile (aggregated across episodes)
+        public PushTSpatialBehaviorProfile spatialProfile = new PushTSpatialBehaviorProfile();
+
+        // Fitness component scores for diagnostics and CSV export
+        public float learnabilityScore;
+        public float challengeScore;
+        public float spatialBehaviorScore;
+        public float noveltyScore;
     }
 
     [Serializable]

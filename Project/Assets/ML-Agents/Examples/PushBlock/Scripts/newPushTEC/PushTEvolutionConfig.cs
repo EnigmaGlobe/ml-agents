@@ -53,5 +53,32 @@ namespace PushTEvolutionMvp
         public float timeEasy = 5.0f;
         public float timeIdeal = 12.0f;
         public float timeHard = 20.0f;
+
+        [Header("M4 Spatial Fitness (Phase 2+)")]
+        public bool useM4Fitness = false;
+        public float m4FitnessBonusWeight = 25f;
+
+        [Header("M4 Spatial Scales")]
+        public float maxExpectedBlockDisplacement = 20f;
+        public float maxExpectedAgentDisplacement = 30f;
+        public float maxExpectedTaskCentrality = 15f;
+        public float scaleBlockNetDisplacement = 10f;
+        public float scaleBlockRadialSpread = 5f;
+        public float scaleTaskCentroidCentrality = 10f;
+
+        [Header("M4 Optimal Spread")]
+        public float targetBlockRadialSpread = 4f;
+        public float minUsefulBlockRadialSpread = 1f;
+        public float maxUsefulBlockRadialSpread = 8f;
+
+        [Header("M4 Diversity (Phase 3+)")]
+        public bool useM4Diversity = false;
+        public float paramDistanceWeight = 0.5f;
+        public float behaviorDistanceWeight = 0.5f;
+
+        [Header("Challenge Schedule")]
+        public bool useGenerationDependentChallenge = false;
+        public float earlyTargetSuccessRate = 0.65f;
+        public float lateTargetSuccessRate = 0.30f;
     }
 }

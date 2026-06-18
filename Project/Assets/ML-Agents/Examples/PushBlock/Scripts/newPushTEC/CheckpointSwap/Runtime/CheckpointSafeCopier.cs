@@ -116,6 +116,12 @@ namespace PushTEvolutionMvp.CheckpointSwap
                     status = "ready"
                 };
 
+                string manifestDirectory = Path.GetDirectoryName(Path.GetFullPath(manifestPath));
+                if (!string.IsNullOrEmpty(manifestDirectory) && !Directory.Exists(manifestDirectory))
+                {
+                    Directory.CreateDirectory(manifestDirectory);
+                }
+
                 CheckpointReadyManifest.Save(manifestPath, manifest);
 
                 result.success = true;

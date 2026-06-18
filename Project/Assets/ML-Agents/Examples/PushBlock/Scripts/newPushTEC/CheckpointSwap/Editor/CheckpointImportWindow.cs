@@ -13,7 +13,7 @@ namespace PushTEvolutionMvp.CheckpointSwap.Editor
         string m_SourceDirectory = "";
         string m_SearchPattern = "*.onnx";
         string m_DestinationOnnxPath = "Assets/Models/FrozenEvaluator/FrozenEvaluator_latest.onnx";
-        string m_ManifestPath = "Assets/Models/FrozenEvaluator/checkpoint_ready.json";
+        string m_ManifestPath = "Temp/FrozenEvaluator/checkpoint_ready.json";
         string m_HistoryDirectory = "Assets/Models/FrozenEvaluator/checkpoint_history";
         bool m_KeepHistory = true;
         bool m_AutoLoadModel = true;

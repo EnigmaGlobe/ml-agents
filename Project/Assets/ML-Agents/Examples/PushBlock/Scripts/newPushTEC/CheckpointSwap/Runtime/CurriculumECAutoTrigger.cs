@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using Unity.MLAgents.Policies;
+using PushTEvolutionMvp.CurriculumOrchestration;
 
 namespace PushTEvolutionMvp.CheckpointSwap
 {
@@ -14,6 +15,10 @@ namespace PushTEvolutionMvp.CheckpointSwap
         [Header("Curriculum EC")]
         public PushTCurriculumEC curriculumEC;
 
+        [Header("Orchestration (optional)")]
+        [Tooltip("If assigned, auto-trigger will process a pending ec_request.json through the orchestration pipeline instead of running EC directly. This writes ec_done.json for the Python orchestrator.")]
+        public CurriculumECRequestProcessor processor;
+
         [Header("Model Loader")]
         public FrozenEvaluatorModelLoader modelLoader;
 
@@ -26,6 +31,39 @@ namespace PushTEvolutionMvp.CheckpointSwap
         public string lastRunStatus = "";
 
         bool m_Subscribed = false;
+
+        void OnValidate()
+        {
+            if (curriculumEC == null)
+            {
+#if UNITY_2021_2_OR_NEWER
+                curriculumEC = FindFirstObjectByType<PushTCurriculumEC>(FindObjectsInactive.Include);
+#else
+                curriculumEC = FindObjectOfType<PushTCurriculumEC>();
+#endif
+            }
+
+            if (processor == null)
+            {
+#if UNITY_2021_2_OR_NEWER
+                processor = FindFirstObjectByType<CurriculumECRequestProcessor>(FindObjectsInactive.Include);
+#else
+                processor = FindObjectOfType<CurriculumECRequestProcessor>();
+#endif
+            }
+
+            if (modelLoader == null)
+            {
+                modelLoader = GetComponent<FrozenEvaluatorModelLoader>();
+#if UNITY_2021_2_OR_NEWER
+                if (modelLoader == null)
+                    modelLoader = FindFirstObjectByType<FrozenEvaluatorModelLoader>(FindObjectsInactive.Include);
+#else
+                if (modelLoader == null)
+                    modelLoader = FindObjectOfType<FrozenEvaluatorModelLoader>();
+#endif
+            }
+        }
 
         void OnEnable()
         {
@@ -54,6 +92,12 @@ namespace PushTEvolutionMvp.CheckpointSwap
                 return;
             }
 
+            if (Application.isPlaying)
+            {
+                Debug.Log("[Checkpoint Swap] Model loaded while in Play Mode; skipping auto-trigger until Edit Mode.");
+                return;
+            }
+
             RunEC();
         }
 
@@ -74,6 +118,24 @@ namespace PushTEvolutionMvp.CheckpointSwap
             if (isEcRunning)
             {
                 Debug.LogWarning("[Checkpoint Swap] EC is already running. Skipping auto-trigger.");
+                return;
+            }
+
+            // If we are being driven by the file-based orchestrator, process the pending
+            // request through the processor so ec_done.json / ec_error.json are written.
+            if (processor != null)
+            {
+                Debug.Log("[Checkpoint Swap] Auto-triggering via CurriculumECRequestProcessor...");
+                var request = CurriculumECRequestManifest.Load(processor.RequestManifestFullPath);
+                if (request != null && request.IsRunCurriculumRequest)
+                {
+                    processor.ProcessRequest(request);
+                }
+                else
+                {
+                    Debug.LogWarning("[Checkpoint Swap] No pending orchestrator request found; falling back to direct EC.");
+                    curriculumEC.RunCurriculumEC();
+                }
                 return;
             }
 

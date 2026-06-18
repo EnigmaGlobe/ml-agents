@@ -4,6 +4,10 @@ using System.Threading.Tasks;
 using UnityEngine;
 using Unity.MLAgents.Policies;
 using PushTEvolutionMvp.CheckpointSwap;
+#if UNITY_EDITOR
+using UnityEditor;
+using UnityEngine.SceneManagement;
+#endif
 
 namespace PushTEvolutionMvp.CurriculumOrchestration
 {
@@ -26,27 +30,101 @@ namespace PushTEvolutionMvp.CurriculumOrchestration
         public string lastRequestId = "";
         public string lastMessage = "";
 
+        DateTime m_LastProcessorPollUtc = DateTime.MinValue;
+        const double PROCESSOR_POLL_INTERVAL_SECONDS = 1.0;
+
         /// <summary>
         /// Full path to the request manifest on disk.
         /// </summary>
-        public string RequestManifestFullPath => ResolveFullPath(settings != null ? settings.requestManifestPath : "Assets/Models/FrozenEvaluator/ec_request.json");
+        public string RequestManifestFullPath => ResolveFullPath(settings != null ? settings.requestManifestPath : "Temp/FrozenEvaluator/ec_request.json");
 
         /// <summary>
         /// Full path to the done manifest on disk.
         /// </summary>
-        public string DoneManifestFullPath => ResolveFullPath(settings != null ? settings.doneManifestPath : "Assets/Models/FrozenEvaluator/ec_done.json");
+        public string DoneManifestFullPath => ResolveFullPath(settings != null ? settings.doneManifestPath : "Temp/FrozenEvaluator/ec_done.json");
 
         /// <summary>
         /// Full path to the error manifest on disk.
         /// </summary>
-        public string ErrorManifestFullPath => ResolveFullPath(settings != null ? settings.errorManifestPath : "Assets/Models/FrozenEvaluator/ec_error.json");
+        public string ErrorManifestFullPath => ResolveFullPath(settings != null ? settings.errorManifestPath : "Temp/FrozenEvaluator/ec_error.json");
 
         void OnValidate()
         {
             if (curriculumEC == null)
             {
-                curriculumEC = FindFirstObjectByType<PushTCurriculumEC>();
+#if UNITY_2021_2_OR_NEWER
+                curriculumEC = FindFirstObjectByType<PushTCurriculumEC>(FindObjectsInactive.Include);
+#else
+                curriculumEC = FindObjectOfType<PushTCurriculumEC>();
+#endif
             }
+
+            if (modelLoader == null)
+            {
+                modelLoader = GetComponent<FrozenEvaluatorModelLoader>();
+#if UNITY_2021_2_OR_NEWER
+                if (modelLoader == null)
+                    modelLoader = FindFirstObjectByType<FrozenEvaluatorModelLoader>(FindObjectsInactive.Include);
+#else
+                if (modelLoader == null)
+                    modelLoader = FindObjectOfType<FrozenEvaluatorModelLoader>();
+#endif
+            }
+        }
+
+#if UNITY_EDITOR
+        [InitializeOnLoadMethod]
+        static void InitializeProcessorPolling()
+        {
+            EditorApplication.update += StaticPoll;
+        }
+
+        static void StaticPoll()
+        {
+            var processors = Resources.FindObjectsOfTypeAll<CurriculumECRequestProcessor>();
+            foreach (var processor in processors)
+            {
+                if (processor == null || processor.gameObject == null)
+                    continue;
+                if (!processor.gameObject.scene.IsValid())
+                    continue; // skip prefab assets
+                processor.PollPendingRequest();
+            }
+        }
+#endif
+
+        /// <summary>
+        /// Editor-only poll fallback: if a pending request manifest exists and we are not
+        /// already running EC, process it directly. This works even if the
+        /// CurriculumECRequestWatcher failed to register.
+        /// </summary>
+        public void PollPendingRequest()
+        {
+#if UNITY_EDITOR
+            if (curriculumEC != null && curriculumEC.IsRunning)
+                return;
+            if (status == CurriculumECStatus.RunningEC)
+                return;
+
+            var now = DateTime.UtcNow;
+            if ((now - m_LastProcessorPollUtc).TotalSeconds < PROCESSOR_POLL_INTERVAL_SECONDS)
+                return;
+            m_LastProcessorPollUtc = now;
+
+            string path = RequestManifestFullPath;
+            if (!File.Exists(path))
+                return;
+
+            var request = CurriculumECRequestManifest.Load(path);
+            if (request == null || !request.IsRunCurriculumRequest)
+                return;
+
+            if (string.Equals(request.request_id, lastRequestId, StringComparison.Ordinal))
+                return;
+
+            Debug.Log($"[Curriculum Orchestration] Processor poll detected pending request '{request.request_id}'. Processing...");
+            ProcessRequest(request);
+#endif
         }
 
         /// <summary>
@@ -110,9 +188,12 @@ namespace PushTEvolutionMvp.CurriculumOrchestration
             catch (Exception ex)
             {
                 status = CurriculumECStatus.ErrorExecutionFailed;
-                lastMessage = $"Exception during EC: {ex.Message}";
+                lastMessage = $"Exception during EC: {ex.Message}\n{ex.StackTrace}";
                 Debug.LogError($"[Curriculum Orchestration] {lastMessage}");
+                Debug.LogException(ex);
+                WriteExceptionToFile(ex, $"Request {request?.request_id}");
                 WriteErrorManifest(request, "ExecutionFailed", lastMessage);
+                Debug.Break();
             }
         }
 
@@ -163,9 +244,20 @@ namespace PushTEvolutionMvp.CurriculumOrchestration
 
             if (bp.Model == null)
             {
-                errorCode = "MissingFrozenEvaluatorModel";
-                errorMessage = "FrozenEvaluator BehaviorParameters.Model is null.";
-                return false;
+                Debug.LogWarning("[Curriculum Orchestration] FrozenEvaluator model is null. Attempting to load latest model before failing...");
+                if (modelLoader != null)
+                {
+                    modelLoader.LoadLatestModel();
+                }
+
+                // Re-check after attempting load
+                bp = curriculumEC.frozenEvaluator.agent.GetComponent<BehaviorParameters>();
+                if (bp.Model == null)
+                {
+                    errorCode = "MissingFrozenEvaluatorModel";
+                    errorMessage = "FrozenEvaluator BehaviorParameters.Model is null and could not be auto-loaded.";
+                    return false;
+                }
             }
 
             if (bp.BehaviorType != BehaviorType.InferenceOnly)
@@ -199,6 +291,7 @@ namespace PushTEvolutionMvp.CurriculumOrchestration
 
         void WriteDoneManifest(CurriculumECRequestManifest request, PushTCurriculumECResult result, string startedAt)
         {
+            EnsureManifestDirectoryExists(DoneManifestFullPath);
             try
             {
                 var done = new CurriculumECDoneManifest
@@ -231,6 +324,7 @@ namespace PushTEvolutionMvp.CurriculumOrchestration
 
         void WriteErrorManifest(CurriculumECRequestManifest request, string errorCode, string message)
         {
+            EnsureManifestDirectoryExists(ErrorManifestFullPath);
             try
             {
                 status = CurriculumECStatus.WritingError;
@@ -249,7 +343,10 @@ namespace PushTEvolutionMvp.CurriculumOrchestration
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[Curriculum Orchestration] Failed to write ec_error.json: {ex.Message}");
+                Debug.LogError($"[Curriculum Orchestration] Failed to write ec_error.json: {ex.Message}\n{ex.StackTrace}");
+                Debug.LogException(ex);
+                WriteExceptionToFile(ex, "WriteErrorManifest");
+                Debug.Break();
             }
         }
 
@@ -282,6 +379,39 @@ namespace PushTEvolutionMvp.CurriculumOrchestration
         {
             return Path.GetFullPath(
                 Path.Combine(Path.GetDirectoryName(Application.dataPath), assetRelativePath));
+        }
+
+        static void EnsureManifestDirectoryExists(string manifestFullPath)
+        {
+            try
+            {
+                string directory = Path.GetDirectoryName(manifestFullPath);
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+            }
+            catch
+            {
+                // Best effort; the write itself will log a failure if the directory is missing.
+            }
+        }
+
+        static void WriteExceptionToFile(Exception ex, string context)
+        {
+            try
+            {
+                string logDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Logs"));
+                Directory.CreateDirectory(logDir);
+                string logPath = Path.Combine(logDir, "curriculum_ec_errors.txt");
+                string content = $"===== {DateTime.UtcNow:O} [{context}] =====\n{ex}\n\n";
+                File.AppendAllText(logPath, content);
+                Debug.Log($"[Curriculum Orchestration] Full exception written to: {logPath}");
+            }
+            catch
+            {
+                // Best effort.
+            }
         }
 
         string ToProjectRelativePath(string fullPath)
