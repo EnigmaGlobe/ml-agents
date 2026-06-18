@@ -4,6 +4,11 @@ File-based Curriculum EC orchestrator for PushT / PushBlock.
 
 Version 3.2: full multi-stage training loop.
 
+command
+activate mlagents
+cd /d C:\Soqqle\ml-agents
+python Tools\curriculum_orchestrator.py config\curriculum_orchestration_test.yaml
+
 Workflow per stage:
 1. Run `mlagents-learn` with a run-id and config.
 2. Wait for the training process to finish.
@@ -41,14 +46,30 @@ PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 UNITY_PROJECT_DIR = PROJECT_ROOT / "Project"
 FROZEN_EVALUATOR_DIR = UNITY_PROJECT_DIR / "Assets" / "Models" / "FrozenEvaluator"
 
-REQUEST_PATH = FROZEN_EVALUATOR_DIR / "ec_request.json"
-DONE_PATH = FROZEN_EVALUATOR_DIR / "ec_done.json"
-ERROR_PATH = FROZEN_EVALUATOR_DIR / "ec_error.json"
-CHECKPOINT_READY_PATH = FROZEN_EVALUATOR_DIR / "checkpoint_ready.json"
+# Keep temporary JSON communication manifests outside of Assets so Unity does not
+# generate .meta files for them. Only the .onnx model lives in Assets.
+EC_MANIFEST_DIR = UNITY_PROJECT_DIR / "Temp" / "FrozenEvaluator"
+
+REQUEST_PATH = EC_MANIFEST_DIR / "ec_request.json"
+DONE_PATH = EC_MANIFEST_DIR / "ec_done.json"
+ERROR_PATH = EC_MANIFEST_DIR / "ec_error.json"
+CHECKPOINT_READY_PATH = EC_MANIFEST_DIR / "checkpoint_ready.json"
 FROZEN_EVALUATOR_ONNX = FROZEN_EVALUATOR_DIR / "FrozenEvaluator_latest.onnx"
 
+GENOME_POOL_LATEST = (
+    UNITY_PROJECT_DIR
+    / "Assets"
+    / "ML-Agents"
+    / "Examples"
+    / "PushBlock"
+    / "Scripts"
+    / "newPushTEC"
+    / "curriculum_outputs"
+    / "genome_pool_latest.json"
+)
+
 DEFAULT_POLL_INTERVAL = 2.0
-DEFAULT_EC_TIMEOUT = 600.0
+DEFAULT_EC_TIMEOUT = 1800.0
 DEFAULT_POST_CHECKPOINT_DELAY = 5.0
 
 
@@ -66,6 +87,7 @@ def now_iso() -> str:
 
 def clear_ec_manifests():
     """Remove old done/error manifests before starting a new EC request."""
+    EC_MANIFEST_DIR.mkdir(parents=True, exist_ok=True)
     for path in (DONE_PATH, ERROR_PATH):
         if path.exists():
             path.unlink()
@@ -82,7 +104,7 @@ def write_checkpoint_ready(checkpoint_step: int, source_path: Path):
         "copied_at": now_iso(),
         "status": "ready",
     }
-    FROZEN_EVALUATOR_DIR.mkdir(parents=True, exist_ok=True)
+    EC_MANIFEST_DIR.mkdir(parents=True, exist_ok=True)
     with open(CHECKPOINT_READY_PATH, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
     print(f"[Orchestrator] Wrote {CHECKPOINT_READY_PATH}")
@@ -107,7 +129,7 @@ def write_ec_request(stage_cfg: dict, checkpoint_step: int):
         "expected_behavior_name": stage_cfg.get("expected_behavior_name", "PushBlock"),
     }
 
-    FROZEN_EVALUATOR_DIR.mkdir(parents=True, exist_ok=True)
+    EC_MANIFEST_DIR.mkdir(parents=True, exist_ok=True)
     with open(REQUEST_PATH, "w", encoding="utf-8") as f:
         json.dump(request, f, indent=2)
 
@@ -117,17 +139,31 @@ def write_ec_request(stage_cfg: dict, checkpoint_step: int):
 
 
 def wait_for_ec_result(
+    request_id: Optional[str] = None,
     poll_interval: float = DEFAULT_POLL_INTERVAL,
     timeout: float = DEFAULT_EC_TIMEOUT,
 ):
     """Poll for ec_done.json or ec_error.json. Returns (success, data)."""
     start = time.time()
     print(f"[Orchestrator] Waiting for EC result (timeout={timeout}s)...")
+    print(f"[Orchestrator] Watching DONE_PATH: {DONE_PATH}")
+    print(f"[Orchestrator] Watching ERROR_PATH: {ERROR_PATH}")
+    if request_id:
+        print(f"[Orchestrator] Expecting request_id: {request_id}")
 
     while time.time() - start < timeout:
         if ERROR_PATH.exists():
             with open(ERROR_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            if request_id and data.get("request_id") != request_id:
+                print("[Orchestrator] Ignoring stale ERROR manifest:")
+                print(json.dumps(data, indent=2))
+                # Remove stale manifest so we don't read it again.
+                try:
+                    ERROR_PATH.unlink()
+                except OSError:
+                    pass
+                continue
             print("[Orchestrator] ERROR manifest detected:")
             print(json.dumps(data, indent=2))
             return False, data
@@ -135,6 +171,14 @@ def wait_for_ec_result(
         if DONE_PATH.exists():
             with open(DONE_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            if request_id and data.get("request_id") != request_id:
+                print("[Orchestrator] Ignoring stale DONE manifest:")
+                print(json.dumps(data, indent=2))
+                try:
+                    DONE_PATH.unlink()
+                except OSError:
+                    pass
+                continue
             print("[Orchestrator] DONE manifest detected:")
             print(json.dumps(data, indent=2))
             return True, data
@@ -215,6 +259,11 @@ def build_mlagents_command(mlagents_learn: str, stage_cfg: dict, global_cfg: dic
     initialize_from = stage_cfg.get("initialize_from") or global_cfg.get("initialize_from")
     if initialize_from:
         cmd.extend(["--initialize-from", initialize_from])
+
+    # Orchestration stages are expected to start fresh. Allow override via config.
+    force = stage_cfg.get("force") if "force" in stage_cfg else global_cfg.get("force", True)
+    if force:
+        cmd.append("--force")
 
     return cmd
 
@@ -337,10 +386,11 @@ def run_stage(stage_cfg: dict, global_cfg: dict) -> bool:
 
     # 6. Trigger Curriculum EC
     clear_ec_manifests()
-    write_ec_request(stage_cfg, checkpoint_step)
+    request_id = write_ec_request(stage_cfg, checkpoint_step)
 
     # 7. Wait for EC result
     success, data = wait_for_ec_result(
+        request_id=request_id,
         poll_interval=global_cfg.get("ec_poll_interval", DEFAULT_POLL_INTERVAL),
         timeout=global_cfg.get("ec_timeout_seconds", DEFAULT_EC_TIMEOUT),
     )
@@ -350,12 +400,55 @@ def run_stage(stage_cfg: dict, global_cfg: dict) -> bool:
         return False
 
     print(f"[Orchestrator] Stage {stage} succeeded. selected_count={data.get('selected_count')}, generation_id={data.get('generation_id')}")
+
+    # 8. Clean up the processed request manifest so the next stage / a domain reload
+    #    does not re-trigger the same request.
+    if global_cfg.get("clear_request_after_done", True):
+        if REQUEST_PATH.exists():
+            REQUEST_PATH.unlink()
+            print(f"[Orchestrator] Cleared processed request manifest: {REQUEST_PATH}")
+
     return True
 
 
 # -----------------------------------------------------------------------------
 # Main
 # -----------------------------------------------------------------------------
+
+def maybe_start_fresh(global_cfg: dict):
+    """Archive any pre-existing genome_pool_latest.json and write an empty pool so
+    stage 1 trains on the fallback/easy genome instead of a stale evolved pool
+    from earlier runs."""
+    if not global_cfg.get("start_fresh", False):
+        return
+
+    if GENOME_POOL_LATEST.exists():
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        backup = GENOME_POOL_LATEST.with_suffix(f".pre_orchestration_{timestamp}.json")
+        shutil.move(str(GENOME_POOL_LATEST), str(backup))
+        print(f"[Orchestrator] start_fresh=true: archived old pool -> {backup}")
+
+    # Write an empty pool JSON. PushTCurriculumEnvironment.Awake() will load it,
+    # clear any stale genomes baked into the GenomePool asset, and use fallback.
+    empty_pool = {
+        "genomes": [],
+        "generationId": 0,
+        "targetSuccessRateMin": 0.30,
+        "targetSuccessRateMax": 0.75,
+        "evalEpisodesPerGenome": 10,
+    }
+    GENOME_POOL_LATEST.parent.mkdir(parents=True, exist_ok=True)
+    with open(GENOME_POOL_LATEST, "w", encoding="utf-8") as f:
+        json.dump(empty_pool, f, indent=2)
+    print(f"[Orchestrator] start_fresh=true: wrote empty pool -> {GENOME_POOL_LATEST}")
+
+
+def clear_stale_request_manifest():
+    """Remove an old ec_request.json so the watcher does not re-process it."""
+    if REQUEST_PATH.exists():
+        REQUEST_PATH.unlink()
+        print(f"[Orchestrator] Cleared stale request manifest: {REQUEST_PATH}")
+
 
 def main():
     if len(sys.argv) < 2:
@@ -365,6 +458,9 @@ def main():
 
     print(f"[Orchestrator] Loading config: {config_path}")
     cfg = load_config(config_path)
+
+    maybe_start_fresh(cfg)
+    clear_stale_request_manifest()
 
     stages = cfg.get("stages", [])
     if not stages:

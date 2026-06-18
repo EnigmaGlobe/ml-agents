@@ -1,5 +1,5 @@
 import atexit
-from distutils.version import StrictVersion
+import re
 
 import numpy as np
 import os
@@ -88,19 +88,31 @@ class UnityEnvironment(BaseEnv):
         )
 
     @staticmethod
+    def _parse_version(version_str: str) -> Tuple[int, ...]:
+        """Parse a version string into a tuple of integers.
+
+        Avoids distutils.version.StrictVersion, which is incompatible with
+        newer setuptools / Python 3.12+.
+        """
+        match = re.match(r"(\d+(?:\.\d+)*)", version_str.strip())
+        if not match:
+            return (0,)
+        return tuple(int(x) for x in match.group(1).split("."))
+
+    @staticmethod
     def _check_communication_compatibility(
         unity_com_ver: str, python_api_version: str, unity_package_version: str
     ) -> bool:
-        unity_communicator_version = StrictVersion(unity_com_ver)
-        api_version = StrictVersion(python_api_version)
-        if unity_communicator_version.version[0] == 0:
+        unity_communicator_version = UnityEnvironment._parse_version(unity_com_ver)
+        api_version = UnityEnvironment._parse_version(python_api_version)
+        if unity_communicator_version[0] == 0:
             if (
-                unity_communicator_version.version[0] != api_version.version[0]
-                or unity_communicator_version.version[1] != api_version.version[1]
+                unity_communicator_version[0] != api_version[0]
+                or unity_communicator_version[1] != api_version[1]
             ):
                 # Minor beta versions differ.
                 return False
-        elif unity_communicator_version.version[0] != api_version.version[0]:
+        elif unity_communicator_version[0] != api_version[0]:
             # Major versions mismatch.
             return False
         else:
